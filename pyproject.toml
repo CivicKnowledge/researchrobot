@@ -9,3 +9,10 @@ build-backend = "setuptools.build_meta"
 # check out https://github.com/pypa/setuptools_scm
 version_scheme = "guess-next-dev"
 #write_to = "src/researchrobot/_version.py"
+
+[project]
+dependencies = [
+    "more_itertools",
+    "openai",
+    "slugify"
+    ]
