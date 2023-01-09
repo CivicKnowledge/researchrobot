@@ -68,10 +68,10 @@ def census_path_batch_tasks(cdf, db):
     d = []
     from slugify import slugify
 
-    for gname, g in cdf.dropna(subset="filtered_path").groupby("table_id"):
+    for gname, g in cdf[cdf.filtered_path != ""].groupby("table_id"):
         for fp in g.filtered_path.unique():
             k = slugify(f"{gname}-{fp}")
-            if k not in db:
+            if fp and k not in db:
                 d.append((gname, fp))
 
     return d

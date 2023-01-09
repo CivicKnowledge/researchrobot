@@ -7,6 +7,10 @@ import pandas as pd
 from geoid.censusnames import geo_names
 from more_itertools import always_iterable
 
+# Maybe Deprecated! All of this code has been moved
+# to the civicknowledge.com-census_meta-2020e5 data package
+
+
 states = []
 counties = []
 for k, v in geo_names.items():
@@ -33,7 +37,7 @@ def random_place():
                     "comparing counties",
                 ]
             ),
-            *(([""] * 3)),  # Even out the amount of nothing
+            *(([""] * 2)),  # Even out the amount of nothing
         ]
     )
 
@@ -55,7 +59,7 @@ def random_time():
                     "2014 to 2020",
                 ]
             ),
-            *(([""] * 3)),  # Even out the amount of nothing
+            *(([""] * 2)),  # Even out the amount of nothing
         ]
     )
 
@@ -324,5 +328,5 @@ def make_restricted_description(r):
         d = d.replace("people who", "who")
 
         return r.restriction_str + " " + d
-    except AttributeError:
+    except TypeError:
         return r.restriction_str
