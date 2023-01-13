@@ -67,103 +67,179 @@ def random_time():
 subject_choices = {
     "Age-Sex": [
         "sex and age distribution",
-        "number of people by age",
-        "count of people by sex and age",
+        "age group",
+        "gender",
+        "people by age",
+        "sex and age",
     ],
-    "Race": ["portion of people by race", "count of races", "largest racial group"],
+    "Race": ["count of races", "racial group"],
     "Ancestry": ["ancestry", "nationality", "ethnicity"],
     "Foreign Birth": [
         "country of birth",
         "where people were born",
-        "number of people born in other countries",
+        "people born in other countries",
+        "immigrant",
+        "alien",
+        "foreign-born",
+        "migrant",
     ],
     "Place of Birth - Native": [
         "country of birth",
         "where people were born",
-        "number of people born in other countries",
+        "people born in other countries",
+        "immigrant",
+        "alien",
+        "foreign-born",
+        "migrant",
     ],
     "Residence Last Year - Migration": [
         "place that people moved from",
         "place of origin",
         "where people moved from",
     ],
-    "Journey to Work": ["commute", "travel time", "distance to work"],
+    "Journey to Work": ["commute", "travel time", "distance to work", "transporation"],
     "Children - Relationship": [
         "relationship to children",
         "household structure",
-        "number of children",
+        "children",
     ],
     "Households - Families": [
-        "number of families in a household",
+        "families in a household",
         "household structure",
-        "number of households",
+        "households",
     ],
     "Marital Status": [
         "marital status",
+        "married",
+        "divorced",
+        "seperated",
+        "widowed",
+        "single",
+        "never married",
+        "couple",
+        "relationship",
+        "partner",
+        "spouse",
+        "husband",
+        "wife",
+        "married couple",
+        "married spouse",
+        "married partner",
         "relationship status",
-        "number of married people",
+        "married people",
     ],
-    "Fertility": ["number of children", "number of births", "number of pregnancies"],
+    "Fertility": [
+        "children",
+        "births",
+        "pregnancies",
+        "children",
+        "births",
+        "pregnancies",
+    ],
     "School Enrollment": [
         "school enrollment",
-        "number of students",
-        "number of children in school",
+        "school",
+        "education",
+        "enrollment",
+        "students",
+        "children in school",
     ],
     "Educational Attainment": [
         "education level",
-        "number of people with a degree",
-        "number of people with a high school diploma",
+        "degree",
+        "diploma",
+        "certificate",
+        "education",
+        "educational attainment",
+        "people with a degree",
+        "people with a high school diploma",
     ],
     "Language": [
         "language spoken",
-        "number of people who speak a language",
-        "number of people who speak English",
+        "people who speak a language",
+        "people who speak English",
     ],
     "Poverty": [
         "poverty level",
-        "number of people in poverty",
-        "number of people who are poor",
+        "people in poverty",
+        "people who are poor",
     ],
     "Disability": [
         "disability",
-        "number of people with a disability",
-        "number of people who are disabled",
+        "disabled",
+        "people with a disability",
+        "people who are disabled",
     ],
     "Income": [
         "income",
-        "number of people by income",
+        "earnings",
+        "wages",
+        "salary",
+        "people by income",
         "median income",
         "average income",
     ],
     "Earnings": [
         "after tax earnings",
-        "number of people by earnings",
+        "people by earnings",
         "median earnings",
         "average earnings",
+        "income",
+        "earnings",
+        "wages",
+        "salary",
     ],
     "Veteran Status": [
         "veteran status",
-        "number of veterans",
-        "number of people who served in the military",
+        "military",
+        "armed forces",
+        "services",
+        "veterans",
+        "people who served in the military",
     ],
     "Transfer Programs": [
         "SNAP",
         "food stamps",
         "welfare",
-        "number of people on welfare",
-        "number of people on food stamps",
+        "people on welfare",
+        "people on food stamps",
     ],
     "Employment Status": [
-        "number of people who are employed",
-        "number of people who are unemployed",
-        "number of people who are looking for work",
+        "employed",
+        "unemployed",
+        "looking for work",
     ],
-    "Industry-Occupation-Class of Worker": ["", ""],
+    "Industry-Occupation-Class of Worker": [
+        "jobs",
+        "workers",
+        "laborers",
+        "people who work",
+        "employees",
+        "job field",
+        "field of work",
+    ],
     "Housing": ["", ""],
-    "Group Quarters": ["", ""],
+    "Group Quarters": ["living at college", "in prison", "in a nursing home"],
     "Health Insurance": ["", ""],
-    "Computer and Internet Usage": ["", ""],
+    "Computer and Internet Usage": [
+        "computers",
+        "smart phones",
+        "internet access",
+        "social media",
+    ],
 }
+
+
+def inv_subject():
+    """Invert the subject choices dictionary"""
+
+    inv_map = {}
+    for code, terms in subject_choices.items():
+        for term in always_iterable(terms):
+            inv_map[term.lower()] = code.lower()
+
+    return inv_map
+
 
 race_iterations = [
     ("A", "white", ["White", "caucasian"]),
@@ -191,22 +267,95 @@ def raceeth_str(v):
         return choice(list(always_iterable(ri_map.get(v))))
 
 
+def inv_race_iterations():
+    """Invert the race-iteration map, mapping plain english terms to codes"""
+
+    from more_itertools import always_iterable
+
+    race_inv_map = {}
+    for _, code, terms in race_iterations:
+        for term in always_iterable(terms):
+            race_inv_map[term.lower()] = code.lower()
+
+    return race_inv_map
+
+
 age_phrases = {
-    "018-120": ["adults"],
-    "065-120": ["seniors"],
-    "000-018": ["children"],
-    "000-019": ["children"],
-    "000-025": ["children and young adults"],
-    "025-064": ["adults", "working age adults"],
-    "000-003": ["infants"],
-    "000-005": ["infants and todlers"],
-    "000-006": ["infants and todlers"],
-    "000-010": ["young children"],
-    "000-015": ["young children"],
-    "012-014": ["pre-teens"],
-    "012-017": ["teens"],
-    "015-019": ["teens"],
+    "018-120": ["adults", "age 18 and over", "over 18"],
+    "065-120": ["seniors", "aged 65 and older", "over 65"],
+    "000-018": ["children", "age 18 and under", "under 18"],
+    "000-019": ["children", "age 19 and under", "under 19"],
+    "000-025": ["children and young adults", "age 25 and under", "under 25"],
+    "025-064": [
+        "adults",
+        "working age adults",
+    ],
+    "000-003": [
+        "infants",
+        "babies",
+        "newborns",
+        "carpet rats",
+        "ankle biters",
+        "pre-schoolers",
+        "sprog",
+    ],
+    "000-005": ["infants and todlers", "toddlers", "young children", "kindergarteners"],
+    "000-006": ["infants and todlers", "toddlers", "young children"],
+    "000-010": ["young children", "children", "kids", "snot-nosed brats"],
+    "000-015": ["young children", "children", "kids"],
+    "012-014": ["pre-teens", "tweens", "young teens"],
+    "012-017": ["teens", "young adults", "young people", "teenagers"],
+    "015-019": ["teens", "young adults", "young people", "teenagers"],
 }
+
+
+def inv_age_phrases():
+    """Invert the age phrase dictionary"""
+
+    inv_map = {}
+    for code, terms in age_phrases.items():
+        for term in always_iterable(terms):
+            inv_map[term.lower()] = code.lower()
+
+    return inv_map
+
+
+def age_range_terms(df):
+    from itertools import product
+
+    def _age_range_terms(mn, mx):
+
+        if mn == 0:
+            return [
+                f"{mx} and under",
+                f"{mx - 1} and under",
+                f"younger than {mx}",
+                f"younger than {mx + 1}",
+            ]
+        elif mx == 120:
+            return [
+                f"{mn} and older",
+                f"{mn + 1} and older",
+                f"older than {mn}",
+                f"older than {mn + 1}",
+            ]
+        else:
+            v = [f"{mn} to {mx}"]
+            for mni, mxi in product((-1, 1), (-1, 1)):
+                v.append(f"{mn + mni} to {mx + mxi}")
+                v.append(f"{mn + mni} to {mx + mxi} years old")
+
+            return v
+
+    age_terms = {}
+    for age in df.age.unique():
+        if age != "all":
+            mn, mx = [int(e) for e in age.split("-")]
+            terms = _age_range_terms(mn, mx)
+            for term in terms:
+                age_terms[term] = age
+
+    return age_terms
 
 
 def age_str(v):
@@ -250,11 +399,46 @@ pov_phrases = {
 }
 
 
+def inv_pov_phrases():
+    """Invert the poverty phrase dictionary"""
+
+    inv_map = {}
+    for code, terms in pov_phrases.items():
+        for term in always_iterable(terms):
+            inv_map[term.lower()] = code.lower()
+
+    return inv_map
+
+
 def poverty_str(v):
     if v == "all":
         return None
     else:
         return choice(pov_phrases.get(v))
+
+
+sex_phrases = {
+    "all": [
+        None,
+        "both sexes",
+        "children",
+        "boys and girls",
+        "adults",
+        "men and women",
+    ],
+    "male": ["males", "men", "boys", "male children", "male adult"],
+    "female": ["females", "women", "girls", "female children", "female adult"],
+}
+
+
+def inv_sex_phrases():
+    inv_map = {}
+    for code, terms in sex_phrases.items():
+        for term in always_iterable(terms):
+            if term is not None:
+                inv_map[term.lower() if term else term] = code.lower()
+
+    return inv_map
 
 
 def sex_str(v, age):
