@@ -1,0 +1,12 @@
+FROM nginx:latest
+
+RUN mkdir -p /usr/share/nginx/html/.well-known
+
+COPY ai-plugin.json /usr/share/nginx/html/.well-known
+COPY logo.png /usr/share/nginx/html/.well-known
+
+COPY index.html /usr/share/nginx/html
+
+EXPOSE 80 443
+
+CMD ["nginx", "-g", "daemon off;"]

@@ -1,0 +1,20 @@
+version: "3"
+
+services:
+    wellknown:
+        image: wellknown
+        build:
+            context: .
+            dockerfile: Dockerfile.wellknown
+
+        ports:
+            - 80
+        environment:
+         - VIRTUAL_HOST=researchrobot.org,www.researchrobot.org
+         - LETSENCRYPT_HOST=researchrobot.org,www.researchrobot.org
+         - LETSENCRYPT_EMAIL=eric@civicknowledge.com
+
+networks:
+  default:
+    external:
+      name: webproxy

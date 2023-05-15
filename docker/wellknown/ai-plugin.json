@@ -1,0 +1,19 @@
+{
+  "schema_version": "v1",
+  "name_for_model": "researchrobot",
+  "name_for_human": "Research Robot",
+  "description_for_model": "Plugin for finding variables in datasets that can be used to answer data questions. This plugin should be used when users ask questions related to quatifiable information about people, places, companies and social issues.",
+  "description_for_human": "Find data variables.",
+  "auth": {
+    "type": "user_http",
+    "authorization_type": "bearer"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "http://app.researchrobot.org/.well-known/openapi.yaml",
+    "has_user_authentication": false
+  },
+  "logo_url": "http://app.researchrobot.org/.well-known/logo.png",
+  "contact_email": "eric@researchrobot.org",
+  "legal_info_url": "http://app.researchrobot.org/.well-known/legal.txt"
+}

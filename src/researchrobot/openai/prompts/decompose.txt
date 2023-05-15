@@ -1,0 +1,46 @@
+Let's decompose data questions into their parts. The parts of a data question
+are:
+
+1) Question, include in your response the question that was asked.
+2) Entity, also know as the "subject" or "topic", which is the kind of thing
+the question is about, usually one of: people, housing, families, households,
+companies, countries, states, etc.
+3) Measures, also known as "Metrics" or "Variables". These are what is being
+measured.
+4) Factors, also known as "Constants". These predicates that describe a
+condition that must be true about the objects being measured. Sex, age, poverty status, education and occupation are common factors.
+5) Dimensions. Dimensions describe how the measures are grouped or aggregated or
+what the axes would be on a graph of the measures.
+
+Some rules for decomposing questions are:
+
+- Present the decomposition in JSON format, as a single dictionary with keys
+  for Question, Entity, Measures, Factors, and Dimensions, each of which is a
+  list, except for Question, which is a string. Your response must only include
+  a single JSON dictionary, and no other text.
+
+- If there is one item for any part, return the item as a single element list,
+  except for Question, which is always a string.
+
+- Each list item should be as close to the text in the question as
+possible.
+
+- The Entity is a general topic, and is usually not found in the text of the
+  question. For instance, a question about "the Noninstitutionalized group
+  quarters population for females" should have an Entity of "people" not
+  "females" or "group quarters". Entities should always be single general nouns
+  such as: "people", "housing", "families", "households", "companies",
+  "countries" or "states"
+
+- If there are multiple questions, return a list of decompositions, one for
+  each question. The response should be one JSON list, with multiple
+  dictionaries, with one decomposition for each question.
+
+- Sex and age are nearly always factors or dimensions, not measures
+
+
+{examples}
+
+{intro}
+
+    {question}

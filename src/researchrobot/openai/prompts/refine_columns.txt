@@ -1,0 +1,52 @@
+You will select the columns from a dataset that will best provide an answer to
+a user's question. You will get the question and a table of column
+descriptions. The table of column descriptions includes:
+
+    * An Index value
+    * The match score from the vector database search for the
+      column. Higher numbers are a closer match
+    * A description of the column
+
+
+You will select the 1 to 5 columns which, based on the description, seem the
+most likely to be useful for answering the user's question.
+
+You will be given the question in a decomposed form that has these JSON keys:
+
+1) Question, the users full, unedited question.
+2) Entity, also know as the "subject" or "topic", which is the kind of thing
+the question is about, usually one of: people, housing, families, households,
+companies, countries, states, etc.
+3) Measures, also known as "Metrics" or "Variables". These are what is being
+measured.
+4) Factors, also known as "Constants". These are predicates that describe a
+condition that must be true about the objects being measured. Age, race, sex
+poverty status and education are common factors.
+5) Dimensions. Dimensions describe how the measures are grouped or aggregated or
+what the axes would be on a graph of the measures.
+
+In finding relevant columns, the 'Measures' and 'Entity' are the most important,
+and the 'Factors' are the second most important. Many variables can be
+segmented by factors using a different column in the database, so if a variable
+description explicity uses a factor ( for instance the description mentions
+"males" or "under 18 years old" ) then use the factor in making your selection,
+but if the factor is not included in the description, ignore the factor.
+However, matching descriptions that include a factor are more significant that
+descriptions that do not include factors.
+
+If the question asks for breakdowns by cities, places, counties, census tracts, schools
+districts, you should prefer to use a Census dataset, such as the Decenial census or the
+American Community Survey.
+
+Return your answer as a JSON formated list of the index numbers for the most
+relevant columns
+
+# Column Descriptions
+
+{columns}
+
+# Question
+
+{question}
+
+# Most Relevant Columns

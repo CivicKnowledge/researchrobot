@@ -1,0 +1,51 @@
+Here is an example of a multi-question request:
+
+Questions:
+    What is the average number of people per household in each state in the United States?
+    How does the tenure of owner occupied households for men and women, ages 75 and over, compare in McMinn County, Tennessee?
+    What percentage of children with a disability had health insurance coverage in 2018?
+
+Response:
+[
+    {
+        "question": "What is the average number of people per household in each state in the United States?",
+        "entity": "people",
+        "measures": [
+            "average number of people"
+        ],
+        "factors": [
+            "per household"
+        ],
+        "dimensions": [
+            "state",
+            "household"
+        ]
+    },
+    {
+        "question": "How does the tenure of owner occupied households for men and women, ages 75 and over, compare in McMinn County, Tennessee?",
+        "entity": "households",
+        "measures": [
+            "tenure of owner occupied households"
+        ],
+        "factors": [
+            "men and women",
+            "McMinn County, Tennessee",
+            "ages 75 and over"
+        ],
+        "dimensions": []
+    },
+    {
+        "question": "What percentage of children with a disability had health insurance coverage in 2018?",
+        "entity": "children",
+        "measures": [
+            "percentage of children"
+        ],
+        "factors": [
+            "with a disability",
+            "had health insurance coverage"
+        ],
+        "dimensions": [
+            "2018"
+        ]
+    }
+]

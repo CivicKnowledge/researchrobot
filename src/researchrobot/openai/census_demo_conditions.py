@@ -1,15 +1,14 @@
 """ Convert the components of the census column metadata file into a string that
 better describes the column
 """
+from pathlib import Path
 from random import choice
 
 import pandas as pd
 from geoid.censusnames import geo_names
 from more_itertools import always_iterable
 
-# Maybe Deprecated! All of this code has been moved
-# to the civicknowledge.com-census_meta-2020e5 data package
-
+MAX_AGE = 120
 
 states = []
 counties = []
@@ -283,7 +282,7 @@ def inv_race_iterations():
 age_phrases = {
     "018-120": ["adults", "age 18 and over", "over 18"],
     "065-120": ["seniors", "aged 65 and older", "over 65"],
-    "000-018": ["children", "age 18 and under", "under 18"],
+    "000-018": ["children", "age 18 and under", "under 18", "minors"],
     "000-019": ["children", "age 19 and under", "under 19"],
     "000-025": ["children and young adults", "age 25 and under", "under 25"],
     "025-064": [
@@ -372,6 +371,50 @@ def age_str(v):
         repl = ["and up", "and over", "and older"]
 
         return v.replace("to 120", choice(repl))
+
+
+import re
+
+age_patterns = (
+    (re.compile(r"younger than (?P<max>\d+)(?:\syears\sold)?(?P<min>)"), 0),
+    (re.compile(r"under (?P<max>\d+)(?:\syears\sold)?(?P<min>)"), 0),
+    (re.compile(r"(?P<max>\d+)(?:\syears\sold)? and (?:younger|under)(?P<min>)"), +1),
+    (re.compile(r"older than (?P<min>\d+)(?:\syears\sold)?(?P<max>)"), +1),
+    (re.compile(r"over (?P<min>\d+)(?:\syears\sold)?(?P<max>)"), +1),
+    (re.compile(r"(?P<min>\d+)(?:\syears\sold)? and (?:older|over)(?P<max>)"), 0),
+    (
+        re.compile(
+            r"(?:between\s)?(?P<min>\d+) (?:to|and) (?P<max>\d+)(?:\syears\sold)?"
+        ),
+        0,
+    ),
+)
+
+# TODO
+# "over the age of 18"
+# "under the age of 18"
+
+
+def match_age_range(v):
+    """Match a string to an age range and return a tuple of ages, min age and max age for the range"""
+
+    def int_maybe(v):
+        try:
+            return int(v)
+        except:
+            return 0
+
+    for p, adj in age_patterns:
+        m = p.match(v)
+        if m:
+            mn, mx = (int_maybe(m.group("min")), int_maybe(m.group("max")))
+            if mn == 0:
+                mx += adj
+            elif mx == 0:
+                mn += adj
+                mx = MAX_AGE
+
+            return (mn, mx)
 
 
 pov_phrases = {
@@ -514,3 +557,89 @@ def make_restricted_description(r):
         return r.restriction_str + " " + d
     except TypeError:
         return r.restriction_str
+
+
+class DemoSearch:
+    """Class to index and search the inverted demographics information"""
+
+    def __init__(self, index_file: Path):
+
+        from whoosh.fields import TEXT, Schema
+
+        self.schema = Schema(
+            key=TEXT(stored=True),
+            type=TEXT(stored=True),
+            group=TEXT(stored=True),
+            value=TEXT(stored=True),
+        )
+
+        self.index_file = index_file
+        self._ix = None
+
+    @property
+    def ix(self):
+        from whoosh.index import create_in, open_dir
+
+        if self._ix is None:
+            if self.index_file.exists():
+                self._ix = open_dir(self.index_file)
+            else:
+                self.index_file.mkdir(parents=True, exist_ok=False)
+                self._ix = create_in(self.index_file, self.schema)
+
+        return self._ix
+
+    def index(self, tdf: pd.DataFrame, cdf: pd.DataFrame):
+        from researchrobot.embeddings import (
+            build_columns_terms_map,
+            build_table_terms_map,
+        )
+
+        writer = self.ix.writer()
+
+        for idx, r in build_columns_terms_map(cdf).iterrows():
+            writer.add_document(key=r.key, type="column", group=r.group, value=r.value)
+
+        for idx, r in build_table_terms_map(tdf).iterrows():
+            writer.add_document(key=r.key, type="table", group=r.group, value=r.value)
+
+        for idx, r in tdf.iterrows():
+            writer.add_document(
+                key=r.bare_title, type="table", group="title", value=r.table_id
+            )
+
+        for idx, r in cdf.fillna("").iterrows():
+            writer.add_document(
+                key=r["name"], type="column", group="title", value=r.column_id
+            )
+
+        for idx, r in cdf.fillna("").iterrows():
+            writer.add_document(
+                key=r.path.replace("/", " "),
+                type="column",
+                group="path",
+                value=r.column_id,
+            )
+
+        writer.commit()
+
+    def search(self, query):
+        from whoosh.qparser import MultifieldParser, QueryParser
+
+        hits = []
+
+        with self.ix.searcher() as searcher:
+            query = MultifieldParser(["key", "value"], self.ix.schema).parse(query)
+            results = searcher.search(query, limit=30)
+            for hit in results:
+                hits.append(
+                    {
+                        "key": hit["key"],
+                        "type": hit["type"],
+                        "group": hit["group"],
+                        "value": hit["value"],
+                        "score": hit.score,
+                    }
+                )
+
+        return hits

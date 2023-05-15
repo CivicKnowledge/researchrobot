@@ -1,0 +1,54 @@
+Here are three examples of single-question requests:
+
+Question 1: What is the average number of people per household in each state in
+the United States?
+Decomposition 1:
+{
+    "question": "What is the average number of people per household in each state in the United States?",
+    "entity": "people",
+    "measures": [
+        "average number of people"
+    ],
+    "factors": [
+        "per household"
+    ],
+    "dimensions": [
+        "state",
+        "household"
+    ]
+}
+
+Question 2: How does the tenure of owner occupied households for men and women,
+ages 75 and over, compare in McMinn County, Tennessee?
+Decomposition 2:
+{
+    "question": "How does the tenure of owner occupied households for men and women, ages 75 and over, compare in McMinn County, Tennessee?",
+    "entity": "households",
+    "measures": [
+        "tenure of owner occupied households"
+    ],
+    "factors": [
+        "men and women",
+        "McMinn County, Tennessee",
+        "ages 75 and over"
+    ],
+    "dimensions": []
+}
+
+Question 3: What percentage of children with a disability had health insurance
+coverage in 2018?
+Decomposition 3:
+{
+    "question": "What percentage of children with a disability had health insurance coverage in 2018?",
+    "entity": "children",
+    "measures": [
+        "percentage of children"
+    ],
+    "factors": [
+        "with a disability",
+        "had health insurance coverage"
+    ],
+    "dimensions": [
+        "2018"
+    ]
+}

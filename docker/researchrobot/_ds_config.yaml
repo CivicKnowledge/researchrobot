@@ -1,0 +1,35 @@
+
+cache_path:  /cache/radius
+
+
+redis: redis://:redis_password@redis:6379/0
+
+geocoders:
+
+    osm:
+        priority: 0
+        group: 1
+        url: http://barker:8080
+
+
+    opencage:
+        priority: 1
+        group: 1
+        project: 55D9C0
+        key: 55d9c077eab6479ca684547a9e5e722b
+
+    mapbox:
+        priority: 1
+        group: 1
+        key:  pk.eyJ1IjoiY2l2aWNrbm93bGVkZ2UiLCJhIjoiY2tsanFucmJtMDQ4ejJvbzlmbzkyNG1yMSJ9.wWD2mDY5PQTiEi_YdiIPUw
+
+    mapquest:
+        priority: 1
+        group: 1
+        key:  ZGku7J6SaZxRPWRxbGx2Ignrbw1I2Z59
+
+
+    here:
+        priority: 1
+        group: 1
+        api_key: grtc7M7GPh5UemCQIrq7pQl4P6l1CIZEEL2Z-_VHSAg

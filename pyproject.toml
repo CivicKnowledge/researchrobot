@@ -11,8 +11,10 @@ version_scheme = "guess-next-dev"
 #write_to = "src/researchrobot/_version.py"
 
 [project]
+name = "researchrobot"
+version = "0.0.1"
 dependencies = [
     "more_itertools",
     "openai",
     "slugify"
-    ]
+]

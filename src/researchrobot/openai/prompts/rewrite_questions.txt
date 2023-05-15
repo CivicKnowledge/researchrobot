@@ -1,0 +1,14 @@
+We are going to rewrite data questions to be more explict about what
+information the user wants to know.
+
+For example:
+
+  Original: How many female household members, ages 0 to 18, living in family
+  households who are not related to the head of the household, can be
+  identified by analyzing the given data?
+  Rewrite: How many people who are female, live in a family household, are between the ages of 0 and 18 and not related to the head of the household?
+
+  Original: What is the median household income in Calhoun County, Georgia for American Indian adults in 2016, adjusted for inflation?
+  Rewrite: What is the median income adjusted for inflation for households that are in Calhoun County, Georgia and are headed by an American Indian adults, in 2016?
+
+  Original:

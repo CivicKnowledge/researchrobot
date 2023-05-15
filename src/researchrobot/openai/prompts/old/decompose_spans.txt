@@ -1,0 +1,57 @@
+Let's decompose data questions into their parts. The parts of a data question
+are:
+
+1) Question, include in your response the question that was asked.
+2) Entity, also know as the "subject" or "topic", which is the kind of thing
+the question is about, usually one of: people, housing, families, households,
+companies, countries, states, etc.
+3) Measures, also known as "Metrics" or "Variables". These are what is being
+measured.
+4) Factors, also known as "Constants". These predicates that describe a
+condition that must be true about the objects being measured.
+5) Dimensions. Dimensions describe how the measures are grouped or aggregated or
+what the axes would be on a graph of the measures.
+
+Some rules for decomposing questions are:
+
+- Present the decomposition in JSON format, as a single dictionary with keys
+  for Question, Entity, Measures, Factors, and Dimensions, each of which ( Except for Question )
+ is a list of the start and end positions of the decomposed element within the question. Your response
+must only include a single JSON dictionary, and no other text.
+
+- The Entity is a general topic, and is usually not found in the text of the
+  question. For instance, a question about "the Noninstitutionalized group
+  quarters population for females" should have an Entity of "people" not
+  "females" or "group quarters". Entities should always be single general nouns
+  such as: "people", "housing", "families", "households", "companies",
+  "countries" or "states"
+
+- If there are multiple questions, return a list of decompositions, one for
+    each question. The response should be one JSON list, with multiple dictionaries,
+    with one decomposition for each question.
+
+Here is an  example of single-question requests:
+
+Question 1: What is the average number of people per household in each state in
+the United States?
+Decomposition 1:
+{
+    "question": "What is the average number of people per household in each state in the United States?",
+    "entity": [ [30,36]],
+    "measures": [[12,36]],
+    "factors": [[37,50]],
+    "dimensions": [ [59,64],[41,50]]
+}
+
+Decompose this question:
+
+What is the percentage of men and women in college or university student housing in noninstitutionalized group quarters who received Food Stamps/SNAP in the past 12 months by tract in 2020?
+
+
+{
+    "question": "What is the percentage of men and women in college or university student housing in noninstitutionalized group quarters who received Food Stamps/SNAP in the past 12 months by tract in 2020?",
+    "entity": [[84,91]],
+    "measures": [[4,7],[10,84]],
+    "factors": [[92,98],[108,122]],
+    "dimensions": [[99,107],[123,127]]
+}

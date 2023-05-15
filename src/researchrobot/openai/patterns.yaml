@@ -1,0 +1,270 @@
+age:
+  - younger than {maxage} years old
+  - under {maxage} years old
+  - "{maxage} years old or younger"
+  - "{maxage} years old or under"
+  - under the age of {maxage}
+  - older than {minage} years old
+  - over  {minage} years old
+  - over the age of {minage}
+  - "{minage} years old and older"
+  - between {minage} years old and {maxage} years old
+  - between {minage} and {maxage} years old
+  - from {minage} years old to {maxage} years old
+  - from {minage} to {maxage} years old
+  - ages {minage} to {maxage}
+
+sex:
+  - male
+  - female
+
+person:
+  - "{sex} {age}"
+  - "{sex} and {sex}"
+  - "{sex} or {sex}"
+
+maritalstatus:
+  - married
+  - divorced
+  - single
+  - widowed
+  - separated
+
+place:
+  - in {city}, {state}
+  - in {county}
+  - in {state}
+  - in the city of {city}
+  - in the county of {county}
+  - in the state of {state}
+
+
+time:
+  - in {date1}
+  - during {date1}
+  - from {date1} to {date2}
+  - between {date1} and {date2}
+
+date:
+  - '2010'
+  - '2015'
+  - '2016'
+  - '2020'
+  - June, 2011
+  - April, 2012
+  - May, 2013
+
+race:
+  - white
+  - black
+  - non-hispanic white
+  - hispanic
+  - asian
+  - american indian
+  - hawaiian
+  - chicano
+
+opinion:
+  - minorities should solve their problems on their own
+  - aliens have visited the earth in the last 1000 years
+  - apple pie is better with cheddar cheese on it
+  - the earth is flat
+
+thing:
+  - a smartphone
+  - a computer
+  - internet service
+  - a car
+  - Facebook account
+
+city:
+  - New York City
+  - Los Angeles
+  - Chicago
+  - Phoenix
+  - Philadelphia
+# Maybe objects -> subject
+# and condition -> predicate?
+subjects:
+  people:
+    measures:
+      - total population
+      - the number of {subject}
+      - count of people
+      - average income
+      - total number of mariages
+      - commute time
+      - educational attainment
+      - occupation
+      - belief that {opinion}
+      - number of people who report that they think {opinion}
+      - average lifespan
+      - rate of diabetes
+      - rate of smoking
+    predicates:
+      - have {thing}
+      - are {age}
+      - are {sex}
+      - are {race}
+      - are employed
+      - are {maritalstatus}
+      - live in poverty
+      - aren't in poverty
+      - own a car
+      - spend more than 20 minutes commuting to work
+      - living in a nonfamily household
+    dimensions:
+      - state
+      - tract
+      - county
+      - sex
+      - marital status
+      - age
+      - occupation
+  homes:
+    measures:
+      - number of bedrooms
+      - number of bathrooms
+      - year home built
+      - last sale price
+      - number of roof gables
+      - rate of indoor plumbing
+      - number of dishwashers
+    predicates:
+      - older
+      - newly built
+      - urban
+      - rural
+      - have more than three bedrooms
+      - are over 50 years old
+      - are missing the roof
+      - have indoor plumbing
+    dimensions:
+      - tenure of homeowner
+      - type of roof composition
+      - type of heating fuel
+      - state
+      - county
+      - family structure
+      - type of water pipes
+      - area of property
+  households:
+    measures:
+      - number of people in household
+      - number of own children under the age of 18
+      - family structure of household
+      - median income
+      - number members living in poverty
+      - the number of {subject}
+    predicates:
+      - same sex households
+      - maried households
+      - households with children under 18
+      - be headed by a single female
+      - have children under 18 being raised by grandparents
+      - be headed by a single man
+      - be headed by a single woman
+    dimensions:
+      - marital status
+      - sex of householder
+      - presence of children under 18
+      - state
+      - county
+      - family structure
+
+  families:
+    measures:
+      - number of people in family
+      - having income below median
+      - the number of {subject}
+    predicates:
+      - two parent families
+      - one parent familes
+      - familes
+      - have more than 3 children under the age of 6
+      - that are headed by a same-sex couple
+      - are in poverty
+      - recieve SNAP benefits
+      - moved homes in the last 5 year
+    dimensions:
+      - marital status
+      - sex of householder
+      - presence of children under 18
+      - state
+      - county
+      - family structure
+  countries:
+    measures:
+      - total net migration
+      - gini index
+      - total population
+      - GDP
+    predicates:
+      - developed countries
+      - third-world countries
+      - have not had a war in the last 50 years
+      - have an aging population
+      - are democracies
+    dimensions:
+      - type of government
+      - region
+      - development status
+      - year of independence
+      - continent
+      - country
+      - country code
+  companies:
+    measures:
+      - company profit
+      - total company revenue
+      - EBITA
+      - the number of employees
+    predicates:
+      - companies
+      - profitable companies
+      - software companies
+      - companies with more than 1,000 employees
+      - are profitable
+      - are not profitable
+      - have declining revenues
+    dimensions:
+      - corporate sector
+      - industry
+      - year of incorporation
+      - profit rate category
+
+core:
+  timeseries:
+    - How has {measure1} changed over time
+    - How has {measure1} changed over time {place}
+    - How has {measure1} changed {time}
+
+  correlation:
+    - How does {measure1} correlate to {measure2}
+    - How does {measure1} correlate to {measure2} {place}
+    - How are {measure1} and {measure2} related?
+    - What is the relationship between {measure1} and {measure2}
+    - What is the relationship between {measure1} and {measure2} {place}
+    - How does {measure1} affect {measure2}
+    - Does {measure1} depend on {measure2}
+  point:
+    - How many {subject} {condition1}
+    - How many {subject} {place} {condition1}
+    - How many {subject} {place} {time} {condition1}
+    - How likely are {subject} to {condition1}
+    - What is the rate that {subject} {condition1}
+    - When was the most number of {subject}, by {dimension1} {condition1}
+  comparison:
+    - Do more {subject} {place} {condition1} or {condition2}
+    - Do more {subject} {condition1} or {condition2} {place}
+    - Do {subject} {place} {condition1} more than {subject} {place2}
+  category:
+    - How does {measure1} vary by {dimension1}
+    - How does {measure1} vary by {dimension1} and {dimension2}
+    - What is the number of {subject} {condition1} by {dimension2}
+    - How does {measure1} differ by {dimension1}
+    - How does {measure1} differ by {dimension1} and {dimension2}
+    - What is the number of {subject} {condition1} by {dimension2}
+    - What is the count of {subject} who {condition1} per {dimension2}
+    - How many {subject} {condition1} per {dimension1}
+    - Grouped by {dimension1}, How many {subject} {condition1}

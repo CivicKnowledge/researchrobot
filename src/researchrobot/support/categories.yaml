@@ -1,0 +1,213 @@
+# Every dict in the file has only one key/value. The key is the name of the topic, and
+# the value is a list of the children
+# For census definitions, see: https://www.census.gov/housing/hvs/definitions.pdf
+
+- survey_types:
+    - _description: descriptions of the type of data or type of data collection.
+    - opinion: Surveys of opinions, beliefs or  attitudes and other questions about what do you believe, would you favor, do you prefer, would you rather, would you say, do you agree or disagree, do you think, in your opinion
+    - demographics: Counts of people with aggregations on various factors.
+    - paradata: for variables that are related to the process of running a survey, such as allocation flags, imputation flags, weights, identification numbers, or other types of  fields.
+
+- people:
+    - _description: Characteristics of individual people
+    - age: Age of the person, or an age range for a group. May also be terms like girl, boy, child, adult, or senior.
+    - race: "typically: white, non-hispanic white, black, asian, native american, etc"
+    - ethnicity: mosty commonly for hispanic ethnicity
+    - nativity: where was the person born
+    - citizenship_status: whether a person is a citizen or not.
+    - military_status: Is a person a citizen, a veteran or active duty military?
+    - language: What language people speak
+    - sex: being Male or being female
+    - sexuality: sexual preferences, straight gay, hetrosexual, homosexual.
+    - ses:
+      - _description: social/economic status.
+      - gross_income:
+        - _description: Income from all sources
+        - earnings: typically w-2 income or earned from a business that the person owns
+        - poverty: related to having an incomebelow the federal poverty line.
+        - benefits: income from social security, SNAP, WIC, EBT or other transfer programs.
+        - other
+      - prestige: How much a person is respected by others considering education, employment or other achievements.
+      - social_class: Social class, such as middle class, proking class, upper class or any ohter socicioeconomic heirarchy.
+      - other
+    - education:
+      - enrollment: status of being enrolled in college
+      - training: post-secondary training, such as vocational training
+      - attainment: persons highest education level, such as high school, some college, college, or graduate degrees
+      - aptitude_achievement: scores on educational tests such as SAT, ACT, LSAT, GRE or ASVAB
+    - employment:
+      - _description: topics related to working, emplpyment, or looking for employment.
+      - occupation: a specific job titles, typically linked to a low-level NAICS code
+      - industry: general industry, typically linked to a high-level NAICS code
+      - prestige: how much a persons job or pofession is respected by others.
+      - other
+    - family:
+      - children: number of children
+      - marriage: marriage status, such as married, divorced, seperated, single, never married.
+      - other
+    - living_arrangement:
+      - households: For people who are living in a household, two or more people, related or not,  in the same house
+      - family: For people who are related and are living in the same house
+      - group quarters: Living in groyup quarters such as college, nursing home, millitary barracks or prison.
+      - other
+    - mobility: moving from place to place, such as one state to another.
+    - health:
+        - disability: Does the person have a restriction on mormal acitivity, such as blind,ess, dimentia, hearing loss.
+        - disease
+        - medical_care: Any interaction with doctors, nurses, clinics or hospitals.
+        - payment:
+            - _description: General topic for how a person pays for medical care.
+            - cost: related to the cost of medical care.
+            - insurance: related to having insurance to pay for medical care
+    - psychology:
+        - cognitive_test: IQ tests such as WAIS, Ravens matrices, Wechler.
+        - non_cognitive_test:
+            - attitudes: Tests related to happiness, anxiety, locus of control, self efficacy, etc.
+            - personality: Big-5 personality and similar personality assessments.
+- family_household:
+    - household:
+        - _description: A household is all the people who occupy a single housing unit, regardless of their relationship to one another
+        - composition: who is living in a household
+        - income: total gross income for the entire household.
+    - family:
+        - _description: A family is two or more individuals who are related by birth, marriage, or adoption, although they also may include other unrelated people.
+        - composition: who is a member of the family?
+        - income: total gross income for the workers in the family.
+
+- behavior:
+    - _description: Things people do
+    - _see_also: "ATUS coding rules. https://www.bls.gov/tus/coderules/tu2021coderules.pdf"
+    - crime: any involvement in crime, prision jail, being arrested
+    - drugs: Any use of illegal drugs or selling drugs.
+    - household:
+        - care:
+            - _description: Taking care of other people in the household
+            - childcare: Caring for a child
+            - eldercare: Caring for an adult or senior
+            - other care
+        - household_services:
+            - _description: Performing services required to maintain a household
+            - food preparation: Cooking food, or cleaning the kitchen
+            - purchasing: Buying things for the household
+            - cleaning: Cleaning the house
+            - maintainence: Maintaining or fixing the house.
+            - lawn and garden: Mowing, weeding, triming and other work on plants outside the house.
+
+    - personal:
+        - _description: Things a person does for oneself
+        - Personal consumption: Any purchases for oneself that are not used to maintain a household
+        - eating: Eating food
+        - grooming: Showering, getting a haircut, shaving and other gooming.
+        - other care
+    - employment:
+      - commuting: Driving to work
+      - working: Time spent at work or working
+      - looking for work: Sending resumes, going on interviews, reading job boards or other activities aimed at getting employment.
+    - education
+    - activity:
+        - sport_exercise_recreation: Sports, exercise or other active activities.
+        - socializing_leisure: Spending time with friends, watching TV
+        - hobbies
+        - sex_dating: frequency of sex, Having sex, engaging in sexuality activity,  or going on dates.
+        - travel: Traveling for enjoyment or work, but not commuting.
+        - religion: Attending religious services, mass, church services, baptisims, weddings.
+    - social_civic:
+        - civic:
+            - jury duty: Participating in jury duty.
+            - voting: Casting a vote at a polling place or by mail.
+            - other civic obligations: Registering to vote, getting a drivers license.
+        - volunteering
+
+- housing:
+    - characteristics: Characterisics like the number of bathrooms, having indoor plumbing, the year the housing was built.
+    - value: How much the housing costs.
+    - tenure: The relationship the household has to the housing, such as owner occupied or renter occupied.
+    - cost:
+        - _description: how much the occupants must pay to live in the housing.
+        - rent: cost of rent
+        - mortgage: cost of the mortgage
+    - occupancy: whether the housing is occupied or vacant.
+    - other
+
+- companies:
+    - _description: Characteristics of companies
+
+- education:
+    - finance:
+        - expense: How much is costs to run a school or educated a student. Include per-pupil expenses
+        - expenditures: How much a school or school district spends, not per-pupil expenses.
+    - students:
+        - demographics: Race, ethnicity, povery level, age and other demographic factors of students.
+        - performance:
+            - test scores: Standardized student test scores or proficiency levels.
+        - enrollment_attendance: How many students are enrolled at a school or how many students attend. Often expressed as average daily attendance.
+        - discipline: Suspentions, expulsions or other ways of handing poor student behavior, or incident reports of poor behavior.
+        - college_enrollment: How many high school graduates are enrolled in college, or if a student is enrolled in college.
+    - staff:
+        - demographics: Race, ethnicity, povery level, age and other demographic factors of staff
+        - characteristics: Other characteristics of staff such as age, education or experience.
+
+- issues:
+  - _description: >
+      Culture, government and policy issues that people may have
+      beliefs or opinions about, or that may guide voting, preferences or
+      policy decisions.
+  - religion
+  - politics
+  - education:
+      - k-12_policy
+      - cirriculum
+  - healthcare
+  - homelessness
+  - free_speech
+  - gun_control: Related to guns and firearms including owning firearms, purchasing them, waiting times, storage requirements, training requirements or ownership,
+  - technology:
+      - _description: topics replaced to computers, internet, genetics, science, space exploration, artificial inteligence, biology, medical research and other broad applications of  science and engineering.
+      - internet
+  - public safety and crime:
+      - justice: Courts, criminal convictions, plea bargaining, bonds
+      - enforcement: laws related to punishment of crime or how laws are enforced
+      - police: Number of police, police funding, training police, rules about police behavior and operation, body cameras.
+  - immigration
+  - environment
+  - lifestyle:
+      - family
+      - marriage
+  - sex:
+      - LGB
+      - transgender
+      - abortion
+      - disparities
+  - race:
+      - inequality
+      - racism_discrimination: Racial issues related to racism and racial discrimination.
+  - other
+  - economics:
+    - inequality
+    - taxes
+    - other
+  - group feelings
+  - perceived discrimination
+  - ideology, ethics, morals and values
+
+- politics:
+  - voting:
+    - intention
+    - preference
+    - vote
+    - other
+  - engagement:
+    - registration
+    - voting
+    - campaigning
+    - other
+  - ideology
+  - evaluations:
+      - _description: Assessments of how well government is performing
+  - other
+
+- geography:
+    - _description: Political and geographic regions
+    - country: A geographic region of an entire country. Not used for nativity.
+    - other
+- other

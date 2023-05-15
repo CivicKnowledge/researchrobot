@@ -1,0 +1,74 @@
+version: "2"
+services:
+
+    radsrv:
+        image: radsrv
+        build:
+            context: .
+            dockerfile: Dockerfile
+        environment:
+
+            METAPACK_CACHE: /metapack
+            FLASK_APP: radsrv
+            KICKER: 1
+            VIRTUAL_HOST: ckl3.civicknowledge.com
+            FLASK_SECRET_KEY: vQyhCcc21d8AexRT
+
+        depends_on:
+            - redis
+        ports:
+            - "80"
+
+
+        command:  gunicorn radsrv:app -b 0.0.0.0:80
+        volumes:
+            - cache:/cache:rw
+            - radius:/radius:rw
+
+    shell:
+        image: radsrv
+        command: /bin/bash
+        stdin_open: true
+        tty: true
+        restart: unless-stopped
+        environment:
+
+            METAPACK_CACHE: /metapack
+            FLASK_APP: radsrv
+
+        volumes:
+            - cache:/cache:rw
+            - radius:/radius:rw
+    redis:
+        image: 'bitnami/redis:latest'
+        ports:
+              - '6379:6379'
+        environment:
+          - REDIS_REPLICATION_MODE=master
+          - REDIS_PASSWORD=redis_password
+        volumes:
+          - 'redis_data:/bitnami/redis/data'
+
+    redis-replica:
+        image: 'bitnami/redis:latest'
+        ports:
+          - '6379'
+        depends_on:
+          - redis
+        environment:
+          - REDIS_REPLICATION_MODE=slave
+          - REDIS_MASTER_HOST=redis
+          - REDIS_MASTER_PORT_NUMBER=6379
+          - REDIS_MASTER_PASSWORD=redis_password
+          - REDIS_PASSWORD=redis_replica_password
+
+networks:
+  default:
+    external:
+      name: webproxy
+
+volumes:
+  redis_data:
+    driver: local
+  radius:
+  cache:

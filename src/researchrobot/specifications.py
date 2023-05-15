@@ -8,13 +8,17 @@ import openai
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
-def list_models():
-    r = openai.FineTune.list()
-    return list(r["data"])
+def list_models(code=None):
+    if code is None:
+        r = openai.FineTune.list()
+        return [e["fine_tuned_model"] for e in list(r["data"])]
+    else:
+        return [e for e in list_models() if code in e]
 
 
-def last_model(idx=-1):
-    return list_models()[idx]["fine_tuned_model"]
+def last_model(code=None, idx=-1):
+
+    return list_models(code)[idx]
 
 
 def get_completion(question, model_id=None, all=False):
@@ -78,13 +82,16 @@ def parse_specification_dict(e, s=None):
 def unparse_specification(r, return_dict=False):
     """Unparse a specification dictionary into a string"""
 
-    parts = []
-    parts.append(f"[{r.measure}]")
+    try:
+        d = r.fillna("").to_dict()
+    except AttributeError:
+        d = r
 
-    d = r.fillna("").to_dict()
+    parts = []
+    parts.append(f"[{d['measure']}]")
 
     for part_name in "of for by in during".split():
-        if d[part_name]:
+        if d.get(part_name):
             parts.append(f"{part_name} [{d[part_name]}]")
 
     s = " ".join(parts)

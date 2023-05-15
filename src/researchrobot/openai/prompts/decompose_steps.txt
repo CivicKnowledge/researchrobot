@@ -1,0 +1,110 @@
+Let's decompose data questions into their parts. The parts of a data question
+are:
+
+1) Question, include in your response the question that was asked.
+
+2) Entity, also know as the "subject" or "topic", which is the kind of thing
+the question is about, usually one of: people, housing, families, households,
+companies, countries, states, etc. The Entity is a general topic, and is
+usually not found in the text of the question. For instance, a question about
+"the Noninstitutionalized group quarters population for females" should have an
+Entity of "people" not "females" or "group quarters". Entities should always be
+single general nouns such as: "people", "housing", "families", "households",
+"companies", "countries" or "states"
+
+3) Measures, also known as "Metrics" or "Variables". These are what is being
+measured. Measures are often a count, ratio, mean or median of the number of
+entities.
+
+4) Factors, also known as "Constants". These are Boolean expressions that
+describe acondition that must be true about the entity. Factors usually have
+only one value, rather than a range of values. For instance, if all of the rows
+of data are for people of one age, it is a factor, but if there are multiple
+ages or a gange of ages, it is a dimension. Express factors in the form of a
+predicate, where the left side is the general category, and the right side is
+the specific value. Some examples of factors are: age="18 years old",
+race="Asians", sex="male", location="Phoenix, Arizona".
+
+5) Dimensions. Dimensions describe how the measures are grouped or aggregated
+or what the axes would be on a graph of the measures. If there is a single
+values of something. Dimensions will be categories that can have multiple
+values, not a single value. For instance, age, race, and geographic regions are
+dimensions when they can have multiple values.
+
+Perform your decomposition step by step, using these steps, but only output the
+final JSON dictionary.
+
+When possible, use one of these terms for the name of factors and dimensions:
+'age', 'ancestry', 'benefits', 'birth', 'disability_status', 'education',
+'number_of_employees', 'employment_status', 'english_ability', 'ethnicity',
+'group_quarters_type', 'housing', 'household', 'income', 'industry', 'insurance',
+'internet_subscription', 'language', 'location', 'marital_status', 'migration',
+'mortgage_', 'nationality', 'nativity', 'occupation', 'origin', 'time_period',
+'population', 'poverty', 'race', 'sex', 'citizenship_status',
+
+'inflation_adjustment_year'
+
+1) Identify the entity.
+
+2) List all of the factors that must be true about the entity. Try to express
+the factors in terms of predicates about the entity. For instance, if the
+entity is "people", a factor might be "People who are between 35 and 45 years
+old"
+
+3) Identify the dimensions.
+
+4) Rewrite the question excluding all of the factors and dimensions you
+identified. The new question should only have the entity, measure and
+dimensions.
+
+5) Identify the measures, which should not include anything listed in the
+factors or dimensions.
+
+6) Assemble all of the components you identified in a JSON formatted
+dictionary. All keys in the dictionary are to be lowercase. The values of
+'factors' key is a dictionary. The values of the 'measures' and 'dimension' are
+lists.
+
+# Example
+
+
+Question: What is the median earnings in 2016 for females with management, business, and financial occupations in Pennsylvania?
+
+Response:
+
+{{
+  "question": "What is the median earnings in 2016 for females with management, business, and financial occupations in Pennsylvania?",
+  "entity": "people",
+  "factors": {{
+    "sex": ["female"],
+    "occupation": ["management, business, and financial"],
+    "location": ["Pennsylvania"],
+    "year": ["2016"]
+  }},
+  "dimensions": [],
+  "measures": ["median earnings"]
+}}
+
+Question: How many full-time, year-round civilian employed males and females were there in 2020?
+
+Response:
+
+{{
+  "question": "How many full-time, year-round civilian employed males and females were there in 2020?",
+  "entity": "people",
+  "factors": {{
+    "employment": ["full-time"],
+    "year": ["2020"],
+    "status": ["civilian employed"],
+    "duration": ["year-round"]
+  }},
+  "dimensions": ["sex"],
+  "measures": ["count"]
+}}
+
+
+# Data Question
+
+{question}
+
+# Response

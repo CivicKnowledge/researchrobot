@@ -1,6 +1,15 @@
+import logging
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
 import openai
+import pandas as pd
 from more_itertools import always_iterable, chunked
+from pymilvus import DataType
+from tableintuit import intuit_df
 from tqdm.auto import tqdm
+
+logger = logging.getLogger(__name__)
 
 from researchrobot.openai.census_demo_conditions import (
     age_range_terms,
@@ -30,7 +39,20 @@ mdf_cols = [
 ]
 
 
-def build_terms_map(df):
+def build_table_terms_map(df):
+    groups = (("subject", inv_subject()),)
+
+    terms = []
+
+    for gn, d in groups:
+        for k, v in d.items():
+            if bool(k) and bool(v):
+                terms.append({"group": gn, "key": k, "value": v})
+
+    return pd.DataFrame(terms)
+
+
+def build_columns_terms_map(df):
     groups = (
         ("sex", inv_sex_phrases()),
         ("pov", inv_pov_phrases()),
@@ -45,23 +67,18 @@ def build_terms_map(df):
     for gn, d in groups:
         for k, v in d.items():
             if bool(k) and bool(v):
-                terms.append([gn, k, v, None])
+                terms.append({"group": gn, "key": k, "value": v})
 
-    # The tables datadrame has these values, but not the columns
-    try:
+    for v in df.name.unique():
+        terms.append({"group": "name", "key": v, "value": v})
 
-        for v in df.bare_title.unique():
-            terms.append(["title", v, v, None])
-
-        for v in df.universe.unique():
-            terms.append(["universe", v, v, None])
-    except AttributeError:
-        pass
-
-    return terms
+    return pd.DataFrame(terms)
 
 
-def get_embeddings(texts, add_spaces=True):
+from openai.embeddings_utils import cosine_similarity
+
+
+def get_embeddings(texts, add_spaces=True, normalize=True):
     texts = list(always_iterable(texts))
 
     if add_spaces:
@@ -69,109 +86,312 @@ def get_embeddings(texts, add_spaces=True):
 
     embedding = openai.Embedding.create(input=texts, engine="text-embedding-ada-002")
 
-    ebd = [(t, e["embedding"]) for t, e in zip(texts, embedding["data"])]
+    if normalize:
+        normalize = lambda x: x / np.linalg.norm(x, ord=2)
+    else:
+        normalize = lambda x: x
+
+    ebd = [(t, normalize(e["embedding"])) for t, e in zip(texts, embedding["data"])]
 
     return ebd
 
 
-# Re-integrate the embeddings with the terms, and combine the
-# batches back into a single set.
-def embed_terms(results):
-    terms_embd = []
+def run_embeddings(
+    terms: pd.DataFrame,
+    text_col: str,
+    embeddings_col="embeddings",
+    extant_terms=None,
+    normalize=True,
+):
+    from itertools import chain
 
-    n = 0
-    for r in results:
-        assert len(r[0]) == len(r[2])
+    from joblib import Parallel, delayed
 
-        for term, embed in zip(r[0], r[2]):
-            term[-1] = embed[1]
-            terms_embd.append([n] + term)
-            n += 1
+    batched_terms = [
+        pd.DataFrame(e) for e in chunked(terms.to_dict(orient="records"), 200)
+    ]
 
-    return terms_embd
+    # batched_terms = [terms[i:i + 100] for i in range(0, len(terms), 100)]
 
+    def _f(batch):
+        texts = [r[text_col] for idx, r in batch.iterrows()]
+        return get_embeddings(texts, normalize=normalize)
 
-def run_embeddings(terms):
-    batched_terms = list(chunked(terms, 200))
+    results = Parallel(n_jobs=4)(delayed(_f)(batch) for batch in tqdm(batched_terms))
 
-    results = []
+    keys, embeds = list(zip(*list(chain(*results))))
+    terms = terms.copy()
+    terms[embeddings_col] = [np.array(e) for e in embeds]
 
-    for batch in tqdm(batched_terms):
-        texts = [e[1] for e in batch]
-        ebd = get_embeddings(texts)
-
-        results.append((batch, texts, ebd))
-
-    et = embed_terms(results)
-
-    return et
+    return terms
 
 
-def make_vdb_collection(terms_embd):
-    from pymilvus import (
-        Collection,
-        CollectionSchema,
-        DataType,
-        FieldSchema,
-        connections,
-        utility,
-    )
+from langchain.vectorstores import Milvus
 
-    collection_name = "dataquest"
 
-    connections.connect("default", host="localhost", port="19530")
+class EmbedDb:
+    schema_map = {
+        str: DataType.VARCHAR,
+        int: DataType.INT64,
+        float: DataType.FLOAT,
+    }
 
-    utility.drop_collection(collection_name)
+    def __init__(self, collection_name: str):
+        from pymilvus import connections, utility
 
-    if not utility.has_collection(collection_name):
+        self.name = collection_name
+        self.embeddings_col = None
 
-        entities = list(zip(*terms_embd))
+        connections.connect("default", host="localhost", port="19530")
 
-        group_len = max([len(e) for e in entities[1]]) + 1
-        key_len = max([len(e) for e in entities[2]]) + 1
-        value_len = max([len(e) for e in entities[3]]) + 1
-        embedding_dim = max([len(e) for e in entities[4]])
+        self._table_intition = None
 
-        print("Lengths", group_len, key_len, value_len, embedding_dim)
+        if utility.has_collection(self.name):
+            self.schema = self.collection.schema
+
+            for f in self.schema.fields:
+                if f.dtype == 101:
+                    self.embeddings_col = f.name
+
+        else:
+            self.schema = None
+
+        # Parameters from langchain
+        self.index_params = {
+            "IVF_FLAT": {"params": {"nprobe": 10}},
+            "IVF_SQ8": {"params": {"nprobe": 10}},
+            "IVF_PQ": {"params": {"nprobe": 10}},
+            "HNSW": {"params": {"ef": 10}},
+            "RHNSW_FLAT": {"params": {"ef": 10}},
+            "RHNSW_SQ": {"params": {"ef": 10}},
+            "RHNSW_PQ": {"params": {"ef": 10}},
+            "IVF_HNSW": {"params": {"nprobe": 10, "ef": 10}},
+            "ANNOY": {"params": {"search_k": 10}},
+        }
+
+    def load_collection(
+        self,
+        df: Union[pd.DataFrame, List[str]],
+        embeddings_col="embeddings",
+        text_col="text",
+        drop=False,
+    ):
+
+        df = self._maybe_run_embeddings(
+            df, embeddings_col=embeddings_col, text_col=text_col
+        )
+
+        dq_coll = self.make_collection(df, drop=drop)
+
+        dq_coll.release()
+
+        cols = df.columns.tolist()
+
+        batched_terms = [
+            pd.DataFrame(e) for e in chunked(df.to_dict(orient="records"), 500)
+        ]
+
+        for batch in tqdm(batched_terms):
+            dq_coll.insert(batch[cols])
+
+        self.build_index()
+
+        return dq_coll
+
+    def _maybe_run_embeddings(
+        self,
+        df: Union[pd.DataFrame, List[str]],
+        embeddings_col="embeddings",
+        text_col="text",
+    ):
+
+        ec = self._get_embedding_col(df)
+
+        if ec is None:
+
+            if isinstance(df, list):
+                df = pd.DataFrame(df, columns=[text_col])
+
+            df = run_embeddings(df, text_col=text_col, embeddings_col=embeddings_col)
+
+        return df
+
+    def _get_embedding_col(
+        self,
+        df: Union[pd.DataFrame, List[str]],
+    ) -> str:
+
+        if isinstance(df, list):
+            return None
+
+        t = intuit_df(df.sample(10 if len(df) > 10 else len(df)))
+
+        try:
+            embeddings_col = [
+                col.header
+                for col in t.columns.values()
+                if col.resolved_type == np.ndarray
+            ][0]
+            return embeddings_col
+        except IndexError:
+            return None
+
+    def make_schema(self, df: pd.DataFrame):
+        from pymilvus import CollectionSchema, DataType, FieldSchema
+
+        self.embeddings_col = self._get_embedding_col(df)
+
+        if self.embeddings_col is None:
+            raise ValueError("No embeddings column found in dataframe")
 
         fields = [
-            FieldSchema(
-                name="pk", dtype=DataType.INT64, is_primary=True, auto_id=False
-            ),
-            FieldSchema(name="group", dtype=DataType.VARCHAR, max_length=group_len),
-            FieldSchema(name="key", dtype=DataType.VARCHAR, max_length=key_len),
-            FieldSchema(name="value", dtype=DataType.VARCHAR, max_length=value_len),
-            FieldSchema(
-                name="embeddings", dtype=DataType.FLOAT_VECTOR, dim=embedding_dim
-            ),
+            FieldSchema(name="pk", dtype=DataType.INT64, is_primary=True, auto_id=True)
         ]
+
+        t = intuit_df(df.sample(1000 if len(df) > 1000 else len(df)))
+
+        for col in t.columns.values():
+            if col.header == self.embeddings_col:
+                fields.append(
+                    FieldSchema(
+                        name=col.header,
+                        dtype=DataType.FLOAT_VECTOR,
+                        dim=df[self.embeddings_col].iloc[0].shape[0],
+                    )
+                )
+            elif col.header == "pk":
+                pass  # Already set first, and it  usually the index anyway.
+
+            elif col.resolved_type == str:
+
+                max_len = df[col.header].str.len().max() + 1
+
+                fields.append(
+                    FieldSchema(
+                        name=col.header, dtype=self.schema_map[str], max_length=max_len
+                    )
+                )
+
+            else:
+                fields.append(
+                    FieldSchema(
+                        name=col.header,
+                        dtype=self.schema_map.get(
+                            col.resolved_type, self.schema_map[str]
+                        ),
+                    )
+                )
 
         schema = CollectionSchema(fields, "data question schema")
 
-        dq_coll = Collection(collection_name, schema, consistency_level="Strong")
-        print("Created")
+        return schema
 
-    else:
-        dq_coll = Collection(collection_name)
-        print("Loaded")
+    def make_collection(self, df: pd.DataFrame, drop=False):
+        from pymilvus import Collection, utility
 
-    return dq_coll
+        if drop:
+            self.drop_collection()
 
+        if not utility.has_collection(self.name):
+            logger.info(f"Creating collection {self.name}")
+            self.schema = self.make_schema(df)
 
-def load_vdb_collection(dq_coll, terms_embd):
-    for batch in tqdm(list(chunked(terms_embd, 500))):
-        entities = list(zip(*batch))
-        dq_coll.insert(entities)
-        # print(insert_result)
+            dq_coll = Collection(self.name, self.schema, consistency_level="Strong")
 
+        else:
+            logger.info(f"Collection {self.name} already exists")
+            dq_coll = Collection(self.name)
 
-def make_vdb_index(dq_coll):
-    dq_coll.flush()
+        return dq_coll
 
-    index = {
-        "index_type": "IVF_FLAT",
-        "metric_type": "L2",
-        "params": {"nlist": 128},
-    }
+    @property
+    def collection(self):
+        from pymilvus import Collection
 
-    dq_coll.create_index("embeddings", index)
+        return Collection(self.name)
+
+    def drop_collection(self):
+        from pymilvus import utility
+
+        logger.info(f"Dropping collection {self.name}")
+        utility.drop_collection(self.name)
+
+    def build_index(self):
+        from pymilvus import Collection
+
+        assert self.embeddings_col is not None, "No embeddings column specified"
+
+        dq_coll = Collection(self.name)
+
+        dq_coll.flush()
+
+        dq_coll.drop_index()
+
+        index = {
+            "index_type": "IVF_FLAT",
+            "metric_type": "IP",
+            "params": {"nlist": 100},
+        }
+
+        dq_coll.create_index(self.embeddings_col, index)
+
+    def drop_index(self):
+        from pymilvus import Collection
+
+        dq_coll = Collection(self.name)
+        dq_coll.release()
+        dq_coll.drop_index()
+
+    def _vector_query(self, terms, add_spaces=True, expr=None, limit=20):
+
+        if isinstance(terms, str):
+            terms = terms.split(",")
+
+        if add_spaces:
+            terms = [" " + term.strip().lower() + " " for term in terms]
+
+        vectors = [e[1] for e in get_embeddings(terms)]
+
+        ec = self.embeddings_col
+
+        output_fields = [f.name for f in self.schema.fields if f.name not in [ec, "pk"]]
+
+        self.collection.load()
+
+        search_params = {
+            "metric_type": "IP",
+            "params": {
+                "nprobe": 10,
+            },
+        }
+
+        result = self.collection.search(
+            vectors,
+            ec,
+            search_params,
+            limit=limit,
+            expr=expr,
+            output_fields=output_fields,
+        )
+
+        return result
+
+    def vector_query(self, terms, add_spaces=True, expr=None, limit=20):
+
+        result = self._vector_query(terms, add_spaces, expr=expr, limit=limit)
+
+        hits = []
+        for term, term_hits in zip(terms, result):
+
+            for hit in term_hits:
+                d = {
+                    "query": term,
+                    "score": hit.score,
+                }
+                d.update({e: hit.entity.get(e) for e in hit.entity.fields})
+
+                hits.append(d)
+
+        hits_df = pd.DataFrame(hits)
+
+        return hits_df

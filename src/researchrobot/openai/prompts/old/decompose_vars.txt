@@ -1,0 +1,42 @@
+Let's decompose descriptions of variables in a dataset into their parts. The
+parts of a data question are:
+
+1) Description, include in your response the original description for the
+variable.
+2) Entity, also know as the "subject" or "topic", which is the kind of thing
+the variable is about, usually one of: people, housing, families, households,
+companies, countries, states, etc.
+3) Measures, also known as "Metrics" or "Variables". These are what is being
+measured.
+4) Factors, also known as "Constants". These predicates that describe a
+condition that must be true about the objects being measured.
+5) Dimensions. Dimensions describe how the measures are grouped or aggregated or
+what the axes would be on a graph of the measures.
+
+Some rules for decomposing variable descriptions are:
+
+- Present the decomposition in JSON format, as a list of dictionaries, one
+  dictionary for each description. Each dictionary will have keys for
+  Description, Entity, Measures, Factors, and Dimensions, each of which is a
+  list, except for Question, which is a string. Your response must only include
+  a single list of JSON dictionaries, and no other text.
+
+- If there is one item for any part, return the item as a single element list,
+  except for Question, which is always a string.
+
+- Each list item should be as close to the text in the variable description as
+possible.
+
+- The Entity is a general topic, and is usually not found in the text of the
+  description. For instance, a description like "the Noninstitutionalized group
+  quarters population for females" should have an Entity of "people" not
+  "females" or "group quarters". Entities should always be single general nouns
+  such as: "people", "housing", "families", "households", "companies",
+  "countries" or "states"
+
+
+Decompose these variable descriptions:
+
+{question}
+
+[
