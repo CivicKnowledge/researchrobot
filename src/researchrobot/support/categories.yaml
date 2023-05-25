@@ -6,14 +6,16 @@
     - _description: descriptions of the type of data or type of data collection.
     - opinion: Surveys of opinions, beliefs or  attitudes and other questions about what do you believe, would you favor, do you prefer, would you rather, would you say, do you agree or disagree, do you think, in your opinion
     - demographics: Counts of people with aggregations on various factors.
-    - paradata: for variables that are related to the process of running a survey, such as allocation flags, imputation flags, weights, identification numbers, or other types of  fields.
+    - paradata:
+       - _description: for variables that are related to the process of running a survey, such as allocation flags, imputation flags, weights, identification numbers, or other types of  fields.
+       - dates: Dates, months, or years for when the survey was conducted
 
 - people:
     - _description: Characteristics of individual people
     - age: Age of the person, or an age range for a group. May also be terms like girl, boy, child, adult, or senior.
     - race: "typically: white, non-hispanic white, black, asian, native american, etc"
     - ethnicity: mosty commonly for hispanic ethnicity
-    - nativity: where was the person born
+    - nativity: where was the person born, country of birth.
     - citizenship_status: whether a person is a citizen or not.
     - military_status: Is a person a citizen, a veteran or active duty military?
     - language: What language people speak
@@ -206,8 +208,9 @@
       - _description: Assessments of how well government is performing
   - other
 
+
 - geography:
     - _description: Political and geographic regions
-    - country: A geographic region of an entire country. Not used for nativity.
+    - country: A geographic region of an entire country. Not used for nativity or country of birth
     - other
 - other

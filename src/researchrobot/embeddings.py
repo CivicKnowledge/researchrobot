@@ -9,6 +9,8 @@ from pymilvus import DataType
 from tableintuit import intuit_df
 from tqdm.auto import tqdm
 
+from .config import config
+
 logger = logging.getLogger(__name__)
 
 from researchrobot.openai.census_demo_conditions import (
@@ -142,7 +144,11 @@ class EmbedDb:
         self.name = collection_name
         self.embeddings_col = None
 
-        connections.connect("default", host="localhost", port="19530")
+        connections.connect(
+            config["MILVUS_ALIAS"],
+            host=config["MILVUS_HOST"],
+            port=config["MILVUS_PORT"],
+        )
 
         self._table_intition = None
 

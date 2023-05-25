@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -7,6 +8,8 @@ from typing import List, Union
 import pandas as pd
 
 from researchrobot.openai import openai_one_completion
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -152,7 +155,8 @@ topics in this list. Each line in the list will have: the topic index number, th
 a ":", then and optional description. If the description is not given, infer the description
 from the topic path.
 
-Return your reponse as a JSON list of index numbers. For most questions, more than one topic will apply.
+Return your response as a JSON list of index numbers. For most questions, more than one topic
+will apply. If you return more than one topic, the topics should be in order of importance.
 
 # Topics
 
@@ -162,7 +166,7 @@ Return your reponse as a JSON list of index numbers. For most questions, more th
 
 {question}
 
-# JSON Response
+# JSON List Response
 
 """
 
@@ -190,7 +194,7 @@ class TopicCategorizer:
         """Load the topics into the Vector database"""
 
         self.db.drop_collection()
-        self.db.load_collection(self.topic_df)
+        self.db.load_collection(self.topics_df)
 
     @cached_property
     def topics_df(self):
@@ -214,26 +218,36 @@ class TopicCategorizer:
         e = self.db.vector_query([q], limit=20)
         e = e.sort_values(["score"], ascending=False)
 
-        st = self.topic_df[self.topic_df.path.str.startswith("survey_types/")]
+        st = self.topics_df[self.topics_df.path.str.startswith("survey_types/")]
 
         # Rebuild candidate topics including the survey types
         e = pd.concat(
-            [st, self.topic_df[self.topic_df.path.isin(e.path)]]
+            [st, self.topics_df[self.topics_df.path.isin(e.path)]]
         ).drop_duplicates()
 
         return e
 
-    def refine(self, q, results):
+    def refine(self, q, results, return_response=False):
+
         prompt = refine_prompt_templ.format(
-            object_type="question", topics=results_str(e), question=q
+            object_type="question", topics=results_str(results), question=q
         )
 
         r = openai_one_completion(prompt)
 
-        idx = json.loads(r)
+        try:
+            idx = json.loads(r)
+        except Exception as e:
+            logger.error(f"Error parsing response: {r} Exception='{str(e)}'")
+            raise
 
-        return self.topic_df.loc[idx]
+        df = self.topics_df.loc[idx]
 
-    def search_refine(self, q):
+        if return_response:
+            return df, r
+        else:
+            return df
+
+    def search_refine(self, q, return_response=False):
         e = self.search(q)
-        return self.refine(q, e)
+        return self.refine(q, e, return_response)
