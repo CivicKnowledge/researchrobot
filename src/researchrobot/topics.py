@@ -241,7 +241,7 @@ class TopicCategorizer:
             logger.error(f"Error parsing response: {r} Exception='{str(e)}'")
             raise
 
-        df = self.topics_df.loc[idx]
+        df = (self.topics_df.loc[idx]).rename(columns={"path": "topic"})
 
         if return_response:
             return df, r

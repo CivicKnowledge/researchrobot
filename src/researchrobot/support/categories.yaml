@@ -30,7 +30,7 @@
         - benefits: income from social security, SNAP, WIC, EBT or other transfer programs.
         - other
       - prestige: How much a person is respected by others considering education, employment or other achievements.
-      - social_class: Social class, such as middle class, proking class, upper class or any ohter socicioeconomic heirarchy.
+      - social_class: Social class, such as middle class, working class, upper class or any other socioeconomic heirarchy.
       - other
     - education:
       - enrollment: status of being enrolled in college
