@@ -195,6 +195,9 @@ class RedisKeyValue(RedisCache):
     def __iter__(self):
         yield from self.keys()
 
+    def __delitem__(self, key):
+        return self.redis.delete(self.prefix(key))
+
 
 class RedisSet(RedisCache):
     """Redis set accessor, which uses the sadd(), srem() and sismember() methods"""
@@ -220,6 +223,9 @@ class RedisSet(RedisCache):
     def __iter__(self):
         for e in self.redis.smembers(self.prefix()):
             yield self.from_bytes(e)
+
+    def delete(self):
+        return self.redis.delete(self.prefix())
 
 
 class RobotCache:
