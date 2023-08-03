@@ -198,6 +198,24 @@ class RedisKeyValue(RedisCache):
     def __delitem__(self, key):
         return self.redis.delete(self.prefix(key))
 
+    def get(self, key):
+        """Get the value, without translating encoding"""
+        return self.redis.get(self.prefix(key))
+
+    def getint(self, key):
+        """Get the value as an int, with no encoding"""
+        return int(self.redis.get(self.prefix(key)))
+
+    def setint(self, key, value):
+        """set the value as an int, with no encoding"""
+        self.redis.set(self.prefix(key), value)
+
+    def incr(self, key, amount=1):
+        return self.redis.incr(self.prefix(key), amount)
+
+    def decr(self, key, amount=1):
+        return self.redis.decr(self.prefix(key), amount)
+
 
 class RedisSet(RedisCache):
     """Redis set accessor, which uses the sadd(), srem() and sismember() methods"""
@@ -398,6 +416,13 @@ class RobotCache:
                 continue
 
             yield key, o
+
+    def keys(self, recursive=True):
+        """Return a list of all keys in the cache, default is non-recursive,
+        like list(), but return only the first item of the tuple"""
+
+        for k, o in self.list(recursive=recursive):
+            yield k
 
     def exists(self, *v):
         """Check if a key exists in the cache"""
