@@ -13,8 +13,28 @@ version_scheme = "guess-next-dev"
 [project]
 name = "researchrobot"
 version = "0.0.1"
+
+description = "Research Robot AI Dataset query system"
+readme = "README.md"
+
+
+authors = [
+  {name = "Eric Busboom", email = "eric@civicknowledge.com"}
+]
+license = {text = "Proprietary"}
 dependencies = [
     "more_itertools",
     "openai",
     "slugify"
 ]
+
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python"
+]
+
+[project.urls]
+#Homepage = "https://example.com"
+#Documentation = "https://readthedocs.org"
+Repository = "https://github.com/CivicKnowledge/researchrobot"
+#Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
