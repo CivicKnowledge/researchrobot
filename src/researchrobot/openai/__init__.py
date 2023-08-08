@@ -10,10 +10,12 @@ def openai_one_completion(prompt, system=None, **kwargs):
 
     import openai
 
-    openai.api_key = os.getenv("OPENAI_API_KEY")
+    from researchrobot.config import config
+
+    openai.api_key = config["OPENAI_API_KEY"]
 
     args = {
-        "model": "gpt-4",
+        "model": "gpt-3.5-turbo",
         "temperature": 0.7,
         "max_tokens": 2048,
         "top_p": 1,
@@ -23,7 +25,7 @@ def openai_one_completion(prompt, system=None, **kwargs):
 
     args.update(kwargs)
 
-    chat_models = ("3.5", "4", "4.0")
+    chat_models = ("3.5", "4", "4.0")  # Strings that indicate the model is a chat model
 
     if any([e in args["model"] for e in chat_models]):
 
