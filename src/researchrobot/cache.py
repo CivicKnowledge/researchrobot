@@ -4,12 +4,12 @@ for documents. """
 
 import io
 import json
-import os
 import pickle
-from pathlib import Path, PosixPath
+from pathlib import PosixPath
 
 import redis
-from langchain.document_loaders import PyPDFLoader
+
+# from langchain.document_loaders import PyPDFLoader
 from minio import Minio
 from minio.error import S3Error
 
@@ -69,7 +69,7 @@ def _to_bytes(o):
             size = len(o)
             return type_codes["json"], o, size, "application/json", ""
 
-        except TypeError as e:  # Probably can't be serialized with JSON
+        except TypeError:  # Probably can't be serialized with JSON
 
             o = pickle.dumps(o)
             size = len(o)
@@ -128,7 +128,7 @@ class RedisCache:
         elif isinstance(o, (list, tuple, dict, set, object)):
             try:
                 return self.type_codes["json"], json.dumps(o).encode("utf8")
-            except TypeError as e:  # Probably can't be serialized with JSON
+            except TypeError:  # Probably can't be serialized with JSON
                 return self.type_codes["pickle"], pickle.dumps(o)
         else:
             raise IOError(f"Can't understand how to use object {o}")
@@ -287,10 +287,10 @@ class RobotCache:
         return RobotCache.join_path(self._prefix, v)
 
     def __getitem__(self, key):
-        return RobotCache.get_object(self.bucket, self.nbprefix(key))
+        return RobotCache.get_object(self.minio, self.bucket, self.nbprefix(key))
 
     def __setitem__(self, key, value):
-        return RobotCache.put_object(value, self.bucket, self.nbprefix(key))
+        return RobotCache.put_object(self.minio, value, self.bucket, self.nbprefix(key))
 
     def __iter__(self):
         """Iterate over all keys in the cache, recursively"""
@@ -309,7 +309,7 @@ class RobotCache:
         return "/".join(_p).strip("/")
 
     @staticmethod
-    def get_object(bucket, path=None):
+    def get_object(minio, bucket, path=None):
         """Get an object from the cache for a key
 
         This function will automatically unserialize JSON and Pickled objects,
@@ -320,7 +320,7 @@ class RobotCache:
             bucket, path = bucket.split("/", 1)
 
         try:
-            r = self.minio.get_object(bucket, path)
+            r = minio.get_object(bucket, path)
 
             if (
                 r.getheader("Content-Type") == "application/x-gzip"
@@ -353,18 +353,18 @@ class RobotCache:
                 raise e
 
     @staticmethod
-    def _put_iobytes(o, bucket, path, size, content_type="application/octet-stream"):
+    def _put_iobytes(
+        minio, o, bucket, path, size, content_type="application/octet-stream"
+    ):
         """Store an object in minio for a bucket and a path. If the bucket does not
         exist, it will be created.
         """
 
         try:
-            return self.minio.put_object(
-                bucket, path, o, size, content_type=content_type
-            )
+            return minio.put_object(bucket, path, o, size, content_type=content_type)
         except S3Error as e:
-            if not self.minio.bucket_exists(bucket):
-                self.minio.make_bucket(bucket)
+            if not minio.bucket_exists(bucket):
+                minio.make_bucket(bucket)
                 return minio.put_object(
                     bucket, path, o, size, content_type=content_type
                 )
@@ -372,13 +372,15 @@ class RobotCache:
                 raise e
 
     @staticmethod
-    def _put_bytes(b, bucket, path, size, content_type="application/octet-stream"):
+    def _put_bytes(
+        minio, b, bucket, path, size, content_type="application/octet-stream"
+    ):
         return RobotCache._put_iobytes(
-            io.BytesIO(b), bucket, path, size, content_type=content_type
+            minio, io.BytesIO(b), bucket, path, size, content_type=content_type
         )
 
     @staticmethod
-    def put_object(o, bucket, path=None):
+    def put_object(minio, o, bucket, path=None):
         """Store an object in minio for a bucket and a path. If the bucket does not
         exist, it will be created.
         """
@@ -389,35 +391,25 @@ class RobotCache:
         if isinstance(o, io.BytesIO):
             size = o.getbuffer().nbytes
             return RobotCache._put_iobytes(
-                o, bucket, path, size, content_type="application/octet-stream"
+                minio, o, bucket, path, size, content_type="application/octet-stream"
             )
         else:
             tc, b, size, content_type, ext = _to_bytes(o)
             return RobotCache._put_bytes(
-                b, bucket, path + ext, size, content_type=content_type
+                minio, b, bucket, path + ext, size, content_type=content_type
             )
 
     def delete(self, *v):
-        return minio.remove_object(self.bucket, self.nbprefix(*v))
-
-    @staticmethod
-    def _list_objects(bucket, prefix=None, recursive=True):
-        if "/" in bucket:
-            bucket, prefix = bucket.split("/", 1)
-
-        r = minio.list_objects(bucket, prefix=prefix, recursive=recursive)
-
-        for o in r:
-            fn = f"{o.bucket_name}/{o.object_name}"
-
-            yield (fn, o)
+        return self.minio.remove_object(self.bucket, self.nbprefix(*v))
 
     def list(self, prefix=None, recursive=True):
         """Iterate over all keys in the cache, default is non-recursive"""
 
-        for fn, o in RobotCache._list_objects(
-            self.bucket, prefix=self.nbprefix(prefix) + "/", recursive=recursive
+        for o in self.minio.list_objects(
+            self.bucket, prefix=prefix, recursive=recursive
         ):
+            fn = f"{o.bucket_name}/{o.object_name}"
+
             key = fn.replace(self.prefix(""), "").strip("/")
             if any(e.startswith("_") for e in key.strip("/").split("/")):
                 continue
@@ -451,17 +443,14 @@ class RobotCache:
         else:
             bucket = self.bucket
 
-        return minio.stat_object(bucket, path)
+        return self.minio.stat_object(bucket, path)
 
     @property
     def redis(self):
         """Return the redis connection for this cache. Use this for general access to the
         Redis API. For Key/Value access use, .kv, and for set access, use .set"""
 
-        import redis
-
         if not self._redis:
-
             pool = redis.ConnectionPool(
                 host=self.config["REDIS_HOST"],
                 port=self.config["REDIS_PORT"],
