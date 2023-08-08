@@ -100,8 +100,8 @@ def get_embeddings(texts, add_spaces=True, normalize=True):
 
 def run_embeddings(
     terms: pd.DataFrame,
-    text_col: str,
-    embeddings_col="embeddings",
+    text_col: str = "text",
+    embeddings_col: str = "embeddings",
     extant_terms=None,
     normalize=True,
 ):

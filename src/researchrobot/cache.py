@@ -1,4 +1,6 @@
-"""Functions for caching data, particularly responses from the OpenAI API"""
+"""A Robotic Multi-Cache. THe main interface is to minio, but
+also has a redis cache for fast access to metadata, and links to Mongodb
+for documents. """
 
 import io
 import json
@@ -7,24 +9,11 @@ import pickle
 from pathlib import Path, PosixPath
 
 import redis
+from langchain.document_loaders import PyPDFLoader
 from minio import Minio
 from minio.error import S3Error
 
-from .config import config
-
-minio = Minio(
-    config["MINIO_URL"],
-    access_key=config["MINIO_ACCESS_KEY"],
-    secret_key=config["MINIO_SECRET_KEY"],
-    secure=False,
-)
-
-pool = redis.ConnectionPool(
-    host=config["REDIS_HOST"], port=config["REDIS_PORT"], db=config["REDIS_DB"]
-)
-redis = redis.StrictRedis(decode_responses=True, connection_pool=pool)
-
-from langchain.document_loaders import PyPDFLoader
+from .config import config as base_config
 
 # Type codes for various datatypes and content types
 type_codes = {
@@ -247,7 +236,7 @@ class RedisSet(RedisCache):
 
 
 class RobotCache:
-    def __init__(self, bucket, prefix=None):
+    def __init__(self, bucket: str, prefix: str = None, config: dict = None):
 
         if "/" in bucket and prefix is None:
             self.bucket, prefix = bucket.split("/", 1)
@@ -256,8 +245,24 @@ class RobotCache:
 
         self._prefix = RobotCache.join_path(prefix)
 
-        if not minio.bucket_exists(bucket):
-            minio.make_bucket(bucket)
+        self.config = dict(base_config.items())
+
+        if config is not None:
+            self.config.update(config)
+
+        self.minio = Minio(
+            self.config["MINIO_URL"],
+            access_key=self.config["MINIO_ACCESS_KEY"],
+            secret_key=self.config["MINIO_SECRET_KEY"],
+            secure=False,
+        )
+
+        self._redis = None
+        self._mongo_client = None
+        self._mongo_db = None
+
+        if not self.minio.bucket_exists(bucket):
+            self.minio.make_bucket(bucket)
 
     def sub(self, *prefix):
         """Create a new robot with a sub-prefix"""
@@ -315,7 +320,7 @@ class RobotCache:
             bucket, path = bucket.split("/", 1)
 
         try:
-            r = minio.get_object(bucket, path)
+            r = self.minio.get_object(bucket, path)
 
             if (
                 r.getheader("Content-Type") == "application/x-gzip"
@@ -354,10 +359,12 @@ class RobotCache:
         """
 
         try:
-            return minio.put_object(bucket, path, o, size, content_type=content_type)
+            return self.minio.put_object(
+                bucket, path, o, size, content_type=content_type
+            )
         except S3Error as e:
-            if not minio.bucket_exists(bucket):
-                minio.make_bucket(bucket)
+            if not self.minio.bucket_exists(bucket):
+                self.minio.make_bucket(bucket)
                 return minio.put_object(
                     bucket, path, o, size, content_type=content_type
                 )
@@ -450,7 +457,36 @@ class RobotCache:
     def redis(self):
         """Return the redis connection for this cache. Use this for general access to the
         Redis API. For Key/Value access use, .kv, and for set access, use .set"""
-        return redis
+
+        import redis
+
+        if not self._redis:
+
+            pool = redis.ConnectionPool(
+                host=self.config["REDIS_HOST"],
+                port=self.config["REDIS_PORT"],
+                db=self.config["REDIS_DB"],
+            )
+            self._redis = redis.StrictRedis(decode_responses=True, connection_pool=pool)
+
+        return self._redis
+
+    @property
+    def mongo(self):
+        """Return the MongoDB connection for this cache. Use this for general access to the
+        MongoDB API."""
+
+        if not self._mongo_db:
+            from pymongo import MongoClient
+
+            self._mongo_client = MongoClient(self.config["MONGO_URL"])
+            self._mongo_db = self._mongo_client[self.bucket]
+
+        return self._mongo_db
+
+    def mdb(self, collection: str):
+        """Return a MongoDB collection object"""
+        return self.mongo[collection]
 
     @property
     def kv(self):
