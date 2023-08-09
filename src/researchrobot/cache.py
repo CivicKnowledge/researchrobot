@@ -221,6 +221,9 @@ class RedisSet(RedisCache):
         tc, b = self.to_bytes(value)
         return self.redis.sismember(self.prefix(), tc + b)
 
+    def rand_member(self):
+        return self.from_bytes(self.redis.srandmember(self.prefix()))
+
     def __len__(self):
         return self.redis.scard(self.prefix())
 
@@ -406,8 +409,9 @@ class RobotCache:
         """Iterate over all keys in the cache, default is non-recursive"""
 
         for o in self.minio.list_objects(
-            self.bucket, prefix=prefix, recursive=recursive
+            self.bucket, prefix=self.nbprefix(prefix), recursive=recursive
         ):
+
             fn = f"{o.bucket_name}/{o.object_name}"
 
             key = fn.replace(self.prefix(""), "").strip("/")
