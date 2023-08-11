@@ -60,8 +60,12 @@ def _to_bytes(o):
         return type_codes[bytes], o, len(o), "application/octet-stream", ""
 
     elif hasattr(o, "read"):
-        size = o.getbuffer().nbytes
-        return type_codes["io"], o, size, "application/octet-stream", ""
+        try:
+            size = o.getbuffer().nbytes
+            return type_codes["io"], o, size, "application/octet-stream", ""
+        except AttributeError:
+            # Nope, not a buffer
+            return _to_bytes(o.read())
 
     elif isinstance(o, object):
         try:
@@ -90,7 +94,7 @@ class RedisCache:
         self.bucket = self.cache.bucket
 
     def prefix(self, *v):
-        return self.bucket + "/" + self.cache.prefix(*v)
+        return self.cache.prefix(*v)
 
     def keys(self):
         for e in self.redis.scan_iter(self.prefix("*")):
@@ -217,12 +221,38 @@ class RedisSet(RedisCache):
         tc, b = self.to_bytes(value)
         return self.redis.srem(self.prefix(), tc + b)
 
+    def __delitem__(self, key):
+        return self.remove(key)
+
     def is_member(self, value):
         tc, b = self.to_bytes(value)
         return self.redis.sismember(self.prefix(), tc + b)
 
     def rand_member(self):
         return self.from_bytes(self.redis.srandmember(self.prefix()))
+
+    def get(self):
+        return [self.from_bytes(e) for e in self.redis.smembers(self.prefix())]
+
+    def __iadd__(self, other):
+
+        # convert other to iterable if it isn't already
+        if not hasattr(other, "__iter__"):
+            other = [other]
+
+        for e in other:
+            self.add(e)
+        return self
+
+    def __isub__(self, other):
+
+        # convert other to iterable if it isn't already
+        if not hasattr(other, "__iter__"):
+            other = [other]
+
+        for e in other:
+            self.remove(e)
+        return self
 
     def __len__(self):
         return self.redis.scard(self.prefix())
@@ -234,7 +264,7 @@ class RedisSet(RedisCache):
         for e in self.redis.smembers(self.prefix()):
             yield self.from_bytes(e)
 
-    def delete(self):
+    def clear(self):
         return self.redis.delete(self.prefix())
 
 
@@ -404,6 +434,9 @@ class RobotCache:
 
     def delete(self, *v):
         return self.minio.remove_object(self.bucket, self.nbprefix(*v))
+
+    def __delitem__(self, key):
+        return self.delete(key)
 
     def list(self, prefix=None, recursive=True):
         """Iterate over all keys in the cache, default is non-recursive"""
