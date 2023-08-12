@@ -278,10 +278,10 @@ class RobotCache:
 
         self._prefix = RobotCache.join_path(prefix)
 
-        self.config = dict(base_config.items())
-
         if config is not None:
-            self.config.update(config)
+            self.config = config
+        else:
+            self.config = dict(base_config.items())
 
         self.minio = Minio(
             self.config["MINIO_URL"],
@@ -299,7 +299,7 @@ class RobotCache:
 
     def sub(self, *prefix):
         """Create a new robot with a sub-prefix"""
-        return RobotCache(self.bucket, self.nbprefix(*prefix))
+        return RobotCache(self.bucket, self.nbprefix(*prefix), config=self.config)
 
     @property
     def parent(self):
@@ -537,7 +537,7 @@ class RobotCache:
     #         yield e.decode("utf8").replace(self.prefix(""), "")
 
     def __str__(self):
-        return f"RobotCache({self.bucket}, {self._prefix})"
+        return f'RobotCache({ self.config["MINIO_URL"]}, {self.bucket}, {self._prefix})'
 
     def __repr__(self):
         return str(self)

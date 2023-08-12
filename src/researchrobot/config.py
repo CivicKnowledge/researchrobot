@@ -19,6 +19,7 @@ def get_config(path: Path):
 
 
 config = {
+    **dotenv_values(Path("/usr/local/env/researchrobot.env")),
     **dotenv_values(Path().home().joinpath(".researchrobot.env")),
     # **os.environ,  # override loaded values with environment variables,
     **dotenv_values("../.env"),
