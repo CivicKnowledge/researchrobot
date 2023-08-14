@@ -25,7 +25,13 @@ license = {text = "Proprietary"}
 dependencies = [
     "more_itertools",
     "openai",
-    "slugify"
+    "slugify",
+    "pandas",
+    "requests",
+    "tqdm",
+    "boto3",
+    "pyyaml",
+    "msgpack"
 ]
 
 classifiers = [
