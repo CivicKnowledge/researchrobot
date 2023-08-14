@@ -1,51 +1,51 @@
+import os
 from pathlib import Path
 
-from dotenv import dotenv_values
-
-
-def get_config(path: Path = None):
-
-    if path is not None and not isinstance(path, Path):
-        path = Path(path)
-
-    if path is not None and path.is_dir():
-        return {
-            **dotenv_values(path / ".env"),
-            **dotenv_values(path / ".env.shared"),  # load shared development variables
-            **dotenv_values(path / ".env.secret"),  # load sensitive variables
-        }
-    elif path is not None:
-        return dotenv_values(path)
-
-    else:
-
-        all_config = []
-        for p in extant_paths():
-            all_config.extend(dotenv_values(p).items())
-
-        d = dict(all_config)
-        d["_loaded"] = [str(p) for p in extant_paths()]
-
-        return d
-
+import yaml
 
 # Configuration paths, in order of precedence
-conf_paths = [
-    Path("/usr/local/etc/researchrobot.env"),
-    Path().home().joinpath(".researchrobot.env"),
-    # **os.environ,  # override loaded values with environment variables,
-    Path("../.env"),
-    Path("../.env.shared"),  # load shared development variables
-    Path("../.env.secret"),  # load sensitive variables
-    Path(".env"),
-    Path(".env.shared"),  # load shared development variables
-    Path(".env.secret"),  # load sensitive variables
+_conf_paths = [
+    Path("/usr/local/etc/robotcache.yaml"),
+    Path().home().joinpath(".robotcache.yaml"),
+    Path(os.getenv("ROBOTCACHE_CONF")) if os.getenv("ROBOTCACHE_CONF") else None,
+    Path("../.robotcache.yaml"),
+    Path("../.robotcache-secret.yaml"),
+    Path(".robotcache.yaml"),
+    Path(".robotcache-secret.yaml"),
 ]
 
 
 def extant_paths():
     """return the configuration paths that exist"""
-    return [p for p in conf_paths if p.exists()]
+    return [p for p in _conf_paths if p and p.exists()]
+
+
+def get_config(paths=None):
+    from flatten_dict import flatten, unflatten
+
+    if not isinstance(paths, (list, tuple)):
+        paths = [paths]
+
+    paths = [Path(p) for p in paths if p]
+
+    if not paths:
+        paths = extant_paths()
+
+    loaded = []
+    errors = []
+    lines = []
+    for path in paths:
+        with path.open() as f:
+            try:
+                d = yaml.safe_load(f)
+                loaded.append(path)  # Keep track of the loaded paths
+
+                lines.extend(flatten(d, reducer="dot").items())
+
+            except yaml.YAMLError as exc:
+                errors.append((path, exc))
+
+    return unflatten(dict(lines), splitter="dot")
 
 
 config = get_config()

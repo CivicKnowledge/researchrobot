@@ -1,9 +1,7 @@
-import os
 import unittest
 
-os.environ["MINIO_URL"] = "buzzkill.local:9000"
-
-from researchrobot.cache import RedisCache, RobotCache
+from researchrobot.cache import RobotCache
+from researchrobot.memcache import RedisCache
 
 
 class Foobar:

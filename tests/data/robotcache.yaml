@@ -1,0 +1,24 @@
+caches:
+  file:
+    class: LocalObjectStore
+    bucket: unit-test
+    path: ./cache
+  spaces:
+    class: S3ObjectStore
+    bucket: testing.do.civicknowledge.com
+    endpoint: https://sfo3.digitaloceanspaces.com
+    region: sfo3
+  local_minio:
+    class: S3ObjectStore
+    endpoint: http://localhost:9000
+    access_key: minioadmin
+    secret_key: minioadmin
+  local_redis:
+    class: RedisObjectStore
+    url: redis://localhost:6379/0
+
+
+default:
+  obj: file
+  set: file
+  kv: file
