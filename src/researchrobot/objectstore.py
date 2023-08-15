@@ -88,11 +88,12 @@ def new_object_store(**kwargs):
     """
 
     if "config_path" in kwargs:
+        # Config is provided with a reference to a file
         config = get_config(kwargs["config_path"])
         kwargs.update(config)
     elif "config" in kwargs:
         config = kwargs["config"]
-    elif "class" in kwargs:
+    elif "class_" in kwargs:
         # The user interpolated in a named section of the config,
         # ( ie, ** config['name'] )
         config = None
@@ -100,39 +101,52 @@ def new_object_store(**kwargs):
         config = get_config()
 
     if config is not None:
-        if "name" not in kwargs:
-            # Specified config, but no name, so use the default
-            name = "default"
 
-            assert (
-                name is not None
-            ), "No default object store specified and no name provided"
+        if "class_" in config:
+            # This is one of the named configs, from
+            # the named section of the config
 
+            cache_config = config
         else:
-            name = kwargs["name"]
 
-        try:
-            if name == "default":
-                name = config["default"]
+            # This should be a top-level config, which has
+            # a 'caches' section
+            assert "caches" in config, "No cache configuration found"
 
-            cache_config = config["caches"][name]
-        except KeyError:
-            raise KeyError(
-                f"No configuration for object store named '{name}'. "
-                + f"keys are: {', '.join(config.get('caches', {}).keys())}"
-            )
+            if "name" not in kwargs:
+                # Specified config, but no name, so use the default
+                name = "default"
 
+                assert (
+                    name is not None
+                ), "No default object store specified and no name provided"
+
+            else:
+                name = kwargs["name"]
+
+            try:
+                if name == "default":
+                    name = config["default"]
+
+                cache_config = config["caches"][name]
+            except KeyError:
+
+                raise KeyError(
+                    f"No configuration for object store named '{name}'. "
+                    + f"keys are: {', '.join(config.get('caches', {}).keys())}"
+                )
     else:
-        cache_config = kwargs
+        cache_config = dict(**kwargs)
 
-    for n in ["name", "caches", "default", "class"]:
+    for n in ["name", "caches", "default", "_class"]:
         if n in kwargs:
             del kwargs[n]
 
-    if "class" not in cache_config:
-        raise KeyError("No `class` specified for object store")
+    if "class_" not in cache_config:
+        print(cache_config)
+        raise KeyError("No `class_` specified for object store")
 
-    clz = getattr(sys.modules[__name__], cache_config["class"])
+    clz = getattr(sys.modules[__name__], cache_config["class_"])
 
     args = {**cache_config, **kwargs}
 
