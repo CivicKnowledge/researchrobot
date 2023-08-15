@@ -151,7 +151,7 @@ class ObjectStore(object):
 
         assert self.bucket is not None, "No bucket specified"
 
-    def sub(self, prefix: str):
+    def sub(self, *args):
         """
         Return a new ObjectStore with a sub-prefix
 
@@ -162,8 +162,9 @@ class ObjectStore(object):
         :return:
         :rtype:
         """
+
         return self.__class__(
-            bucket=self.bucket, prefix=self.join_path(prefix), **self.config
+            bucket=self.bucket, prefix=self.join_path(*args), **self.config
         )
 
     @classmethod
@@ -175,7 +176,7 @@ class ObjectStore(object):
 
     def join_path(self, *args):
         args = [self.prefix] + list(args)
-        args = [e.strip("/") for e in args]
+        args = [e.strip("/") for e in args if e]
         args = [e for e in args if e]
 
         return "/".join(args)
@@ -214,6 +215,9 @@ class ObjectStore(object):
 
     def __repr__(self):
         return str(self)
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({self.bucket}, {self.prefix})"
 
     def set(self, key: str):
         return ObjectSet(self, key)
@@ -291,11 +295,6 @@ class S3ObjectStore(_ObjectStore):
         # create_bucket is idempotent, and not more expensive than head_bucket
         # so we can just call it here
         self.create_bucket()
-
-    def sub(self, *args):
-        return S3ObjectStore(
-            bucket=self.bucket, prefix=self.join_path(*args), client=self.client
-        )
 
     def create_bucket(self):
         try:
@@ -477,8 +476,8 @@ class RedisObjectStore(_ObjectStore):
     def join_pathb(self, *args):
         return self.bucket + "/" + super().join_path(*args)
 
-    def sub(self, key: str):
-        return RedisObjectStore(self.bucket, self.join_path(key), client=self.client)
+    def sub(self, *args):
+        return RedisObjectStore(self.bucket, self.join_path(*args), client=self.client)
 
     def put(self, key: str, data: bytes):
         return self.client.set(self.join_pathb(key), pickle.dumps(data))
@@ -515,14 +514,8 @@ class ObjectSet:
         self.key = key
 
     def add(self, value):
-        try:
-            o = self.os.get(self.key)
 
-            if not isinstance(o, set):
-                raise TypeError(f"Object at {self.key} is not a set")
-
-        except KeyError:
-            o = set()
+        o = self.get()
 
         o.add(value)
 
@@ -546,7 +539,7 @@ class ObjectSet:
         return self.remove(key)
 
     def is_member(self, value):
-        return value in self.os.get(self.key)
+        return value in self.get()
 
     def rand_member(self):
         import random
@@ -554,7 +547,16 @@ class ObjectSet:
         return random.choice(list(self.os.get(self.key)))
 
     def get(self):
-        return self.os.get(self.key)
+        try:
+            o = self.os.get(self.key)
+
+            if not isinstance(o, set):
+                raise TypeError(f"Object at {self.key} is not a set")
+
+        except KeyError:
+            o = set()
+
+        return o
 
     def __iadd__(self, other):
 
@@ -577,14 +579,13 @@ class ObjectSet:
         return self
 
     def __len__(self):
-        return len(self.os.get(self.key))
+        return len(self.get())
 
     def __contains__(self, item):
         return self.is_member(item)
 
     def __iter__(self):
-        for e in self.get():
-            yield self.from_bytes(e)
+        return iter(self.get())
 
     def clear(self):
         self.put(self.key, set())
