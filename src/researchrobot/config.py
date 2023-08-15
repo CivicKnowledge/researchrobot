@@ -8,8 +8,12 @@ _conf_paths = [
     Path("/usr/local/etc/robotcache.yaml"),
     Path().home().joinpath(".robotcache.yaml"),
     Path(os.getenv("ROBOTCACHE_CONF")) if os.getenv("ROBOTCACHE_CONF") else None,
+    Path("../robotcache.yaml"),
+    Path("../robotcache-secret.yaml"),
     Path("../.robotcache.yaml"),
     Path("../.robotcache-secret.yaml"),
+    Path("robotcache.yaml"),
+    Path("robotcache-secret.yaml"),
     Path(".robotcache.yaml"),
     Path(".robotcache-secret.yaml"),
 ]

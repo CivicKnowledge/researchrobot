@@ -89,6 +89,7 @@ def new_object_store(**kwargs):
 
     if "config_path" in kwargs:
         config = get_config(kwargs["config_path"])
+        kwargs.update(config)
     elif "config" in kwargs:
         config = kwargs["config"]
     elif "class" in kwargs:
@@ -101,15 +102,19 @@ def new_object_store(**kwargs):
     if config is not None:
         if "name" not in kwargs:
             # Specified config, but no name, so use the default
-            name = config.get("default", {}).get("obj", None)
+            name = "default"
 
             assert (
                 name is not None
             ), "No default object store specified and no name provided"
+
         else:
             name = kwargs["name"]
 
         try:
+            if name == "default":
+                name = config["default"]
+
             cache_config = config["caches"][name]
         except KeyError:
             raise KeyError(
@@ -166,8 +171,7 @@ class ObjectStore(object):
         """Create a new instance of an object store, re-using the
         bucket and prefix from this one."""
 
-        args = {"bucket": self.bucket, "prefix": self.prefix, **kwargs}
-        return new_object_store(**args)
+        return new_object_store(**kwargs)
 
     def join_path(self, *args):
         args = [self.prefix] + list(args)
