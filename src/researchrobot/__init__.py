@@ -16,3 +16,23 @@ except PackageNotFoundError:  # pragma: no cover
     __version__ = "unknown"
 finally:
     del version, PackageNotFoundError
+
+
+def require_version(version: str):
+
+    from semantic_version import Version
+
+    from .exceptions import WrongVersion
+
+    print(
+        Version(__version__), Version(version), Version(__version__) < Version(version)
+    )
+
+    if Version(__version__) < Version(version):
+        raise WrongVersion(
+            f"ERROR! You must have at least version {version} of research robot!"
+        )
+
+
+from .download import cache_dl, make_cache_dl
+from .objectstore import ObjectStore

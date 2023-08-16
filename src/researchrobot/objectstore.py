@@ -406,7 +406,7 @@ class S3ObjectStore(_ObjectStore):
             Bucket=self.bucket, Prefix=self.join_path(prefix)
         )
         for e in response.get("Contents", []):
-            yield e["Key"].lstrip(self.prefix).lstrip("/")
+            yield e["Key"].removeprefix(self.prefix).lstrip("/")
 
     def __str__(self):
         return f"{self.__class__.__name__}({self.bucket}, {self.prefix})"
@@ -445,11 +445,18 @@ class LocalObjectStore(_ObjectStore):
         with shelve.open(self.path) as db:
             del db[self.join_path(key)]
 
-    def list(self, prefix: str = "", recursive=True) -> list:
+    def _list(self):
         with shelve.open(self.path) as db:
             for key in db.keys():
-                if key.startswith(self.prefix):
-                    yield key.lstrip(self.prefix)
+                yield key
+
+    def list(self, prefix: str = "", recursive=True) -> list:
+
+        prefix = self.join_path(prefix) + "/"
+
+        for key in self._list():
+            if key.startswith(prefix):
+                yield key.removeprefix(prefix)
 
     def __str__(self):
         return f"{self.__class__.__name__}({self.path}; {self.bucket}; {self.prefix})"
