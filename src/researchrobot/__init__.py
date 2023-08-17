@@ -19,14 +19,9 @@ finally:
 
 
 def require_version(version: str):
-
     from semantic_version import Version
 
     from .exceptions import WrongVersion
-
-    print(
-        Version(__version__), Version(version), Version(__version__) < Version(version)
-    )
 
     if Version(__version__) < Version(version):
         raise WrongVersion(
