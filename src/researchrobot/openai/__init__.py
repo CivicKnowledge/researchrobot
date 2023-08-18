@@ -10,9 +10,7 @@ def openai_one_completion(prompt, system=None, **kwargs):
 
     import openai
 
-    from researchrobot.config import config
-
-    openai.api_key = config["OPENAI_API_KEY"]
+    openai.api_key = os.getenv("OPENAI_API_KEY")
 
     args = {
         "model": "gpt-3.5-turbo",

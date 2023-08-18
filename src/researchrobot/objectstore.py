@@ -163,6 +163,11 @@ class ObjectStore(object):
         self.prefix = prefix or ""
         self.config = kwargs
 
+        if "_" in bucket:
+            raise ValueError(
+                f"Bucket name '{bucket}' contains an underscore, which is not allowed"
+            )
+
         assert self.bucket is not None, "No bucket specified"
 
     def sub(self, *args):
@@ -310,13 +315,24 @@ class S3ObjectStore(_ObjectStore):
         # so we can just call it here
         self.create_bucket()
 
+    def sub(self, *args):
+        return S3ObjectStore(
+            bucket=self.bucket,
+            prefix=self.join_path(*args),
+            **self.config,
+            client=self.client,
+        )
+
     def create_bucket(self):
+
         try:
             self.client.create_bucket(Bucket=self.bucket)
+
+            print("Created bucket", self.bucket)
         except (
-            self.client.exceptions.BucketAlreadyOwnedByYou,
-            self.client.exceptions.BucketAlreadyExists,
-        ):
+            self.client.exceptions.NoSuchBucket,
+            self.client.exceptions.ClientError,
+        ) as e:
             pass
 
     def _put_bytes(
@@ -328,7 +344,7 @@ class S3ObjectStore(_ObjectStore):
             Key=key,
             Body=data,
             ContentType=content_type or "application/octet-stream",
-            ACL="private",
+            # ACL="private",
             # Metadata=metadata or {}
         )
 
