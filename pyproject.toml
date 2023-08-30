@@ -12,7 +12,7 @@ version_scheme = "guess-next-dev"
 
 [project]
 name = "researchrobot"
-version = "0.1.0"
+version = "0.1.2"
 
 description = "Research Robot AI Dataset query system"
 readme = "README.md"
@@ -27,6 +27,7 @@ dependencies = [
     "openai",
     "slugify",
     "pandas",
+    "geoid",
     "requests",
     "tqdm",
     "boto3",

@@ -25,7 +25,7 @@ def require_version(version: str):
 
     if Version(__version__) < Version(version):
         raise WrongVersion(
-            f"ERROR! You must have at least version {version} of research robot!"
+            f"ERROR! You must have at least version {version} of research robot! ( you have {__version__} )"
         )
 
 
