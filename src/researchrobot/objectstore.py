@@ -602,8 +602,24 @@ class RedisObjectStore(_ObjectStore):
 
         return super().sub(*args, extra_kwargs=extra_kwargs, **kwargs)
 
+    def sub(self, *args, **kwargs):
+
+        if "name" in kwargs or "class_" in kwargs:
+            # We are changing the type, so don't keep the client
+            return super().sub(*args, **kwargs)
+        else:
+            return RedisObjectStore(
+                bucket=self.bucket,
+                prefix=self.prefix if not args else self.join_path(*args),
+                url=self.url,
+                client=self.client,
+            )
+
     def put(self, key: str, data: bytes):
         return self.client.set(self.join_pathb(key), pickle.dumps(data))
+
+    def setex(self, key: str, data: bytes, ttl: int):
+        return self.client.setex(self.join_pathb(key), ttl, pickle.dumps(data))
 
     def get(self, key: str) -> bytes:
 
