@@ -57,7 +57,8 @@ def s3_download(url, directory, force=False):
     filepath = cache_path(url, directory)
 
     # Check if the file already exists
-    if filepath.exists():
+    if filepath.exists() and force is False:
+
         return filepath
     else:
         up = urlparse(url)
@@ -94,8 +95,21 @@ def cache_dl(url, directory=None, force=False):
         raise Exception(f"Unknown scheme: {up.scheme}")
 
 
-def make_cache_dl(directory):
-    def _cache_dl(url):
-        return cache_dl(directory, url)
+def share(o, bucket, key, profile=None):
+    from .objectstore import _to_bytes
 
-    return _cache_dl
+    b, size, content_type, ext = _to_bytes(o)
+
+    if profile is None:
+        profile = os.getenv("RESEARCH_ROBOT_DEFAULT_PROFILE", "default")
+    else:
+        profile = profile
+
+    session = boto3.Session(profile_name=profile)
+
+    s3 = session.client("s3")
+
+    # Upload bytes in b to S3 object at bucket/key
+    s3.put_object(Bucket=bucket, Key=key, Body=b, ContentType=content_type)
+
+    return f"cache_dl('s3://{bucket}/{key}')"

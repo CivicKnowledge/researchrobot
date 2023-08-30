@@ -2,13 +2,10 @@ import os
 from datetime import datetime
 from itertools import count
 from pathlib import Path
-from time import sleep, time
+from time import sleep
 
 import openai
 from more_itertools import always_iterable
-from openai.error import InvalidRequestError, RateLimitError
-
-from .decompose_questions import comp_keys, key_order
 
 
 class FineTuner:

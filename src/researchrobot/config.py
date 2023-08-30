@@ -4,7 +4,7 @@ from pathlib import Path
 import yaml
 
 # Configuration paths, in order of precedence
-_conf_paths = [
+_cache_conf_paths = [
     Path("/usr/local/etc/robotcache.yaml"),
     Path().home().joinpath(".robotcache.yaml"),
     Path(os.getenv("ROBOTCACHE_CONF")) if os.getenv("ROBOTCACHE_CONF") else None,
@@ -21,7 +21,7 @@ _conf_paths = [
 
 def extant_paths():
     """return the configuration paths that exist"""
-    return [p for p in _conf_paths if p and p.exists()]
+    return [p for p in _cache_conf_paths if p and p.exists()]
 
 
 def get_config(paths=None):
@@ -50,6 +50,3 @@ def get_config(paths=None):
                 errors.append((path, exc))
 
     return unflatten(dict(lines), splitter="dot")
-
-
-config = get_config()

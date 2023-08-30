@@ -11,6 +11,35 @@ from pathlib import Path, PosixPath
 from .config import get_config
 
 
+def oscache(storage):
+    """Cache values from a function in `storage`. Not that this does not properly
+    handle default argument, which will not be included in the key"""
+
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            key = (func.__name__, args, frozenset(kwargs.items()))
+            key = "oscache-" + str(key)
+            if key not in storage:
+                storage[key] = func(*args, **kwargs)
+            return storage[key]
+
+        return wrapper
+
+    return decorator
+
+
+def get_content_type(o):
+    import magic
+
+    try:
+        return magic.from_file(o, mime=True)
+    except ImportError:
+        raise ImportError(
+            "You probably need to install lib magic: "
+            + "https://github.com/ahupp/python-magic#installation"
+        )
+
+
 def _to_bytes(o):
     """Convert an object to bytes, and return:
     - the type code
@@ -29,8 +58,9 @@ def _to_bytes(o):
 
     if isinstance(o, PosixPath):
         # Put data from a file
+        content_type = get_content_type(o)
         b = o.read_bytes()
-        return b, len(b), "application/octet-stream", ""
+        return b, len(b), content_type, ""  # "application/octet-stream", ""
 
     elif isinstance(o, str):
         # A normal string, so encode it
@@ -170,26 +200,36 @@ class ObjectStore(object):
 
         assert self.bucket is not None, "No bucket specified"
 
-    def sub(self, *args):
+    def sub(self, *args, extra_kw_args=None, **kwargs):
         """
         Return a new ObjectStore with a sub-prefix
 
-        :param prefix: Prefix to append the
-        :type prefix: str
-        :param name:
-        :type name:
-        :return:
+        :param args: Prefix to append the current prefix
+
+        :param kwargs: If provided, create a new object store with the
+        same bucket and base prefix, but with the new configuration
+
         :rtype:
         """
 
-        return self.__class__(
-            bucket=self.bucket, prefix=self.join_path(*args), **self.config
-        )
+        if kwargs:
+
+            config = kwargs
+            if not "class_" in config and not "name" in config:
+                config["class_"] = self.__class__.__name__
+        else:
+            config = self.config
+
+        config["bucket"] = self.bucket
+        config["prefix"] = self.join_path(*args)
+
+        if extra_kw_args:
+            config.update(extra_kw_args)
+
+        return new_object_store(**config)
 
     @classmethod
     def new(self, **kwargs):
-        """Create a new instance of an object store, re-using the
-        bucket and prefix from this one."""
 
         return new_object_store(**kwargs)
 
@@ -199,6 +239,9 @@ class ObjectStore(object):
         args = [e for e in args if e]
 
         return "/".join(args)
+
+    def join_pathb(self, *args):
+        return self.bucket + "/" + self.join_path(*args)
 
     def put(self, key: str, data: bytes):
         raise NotImplementedError
@@ -238,7 +281,7 @@ class ObjectStore(object):
     def __str__(self):
         return f"{self.__class__.__name__}({self.bucket}, {self.prefix})"
 
-    def set(self, key: str):
+    def set(self, key: str = "set"):
         return ObjectSet(self, key)
 
 
@@ -301,7 +344,11 @@ class S3ObjectStore(_ObjectStore):
             config["region_name"] = self.region
 
         if client is None:
-            self.session = boto3.session.Session()
+            if "profile" in kwargs:
+                self.session = boto3.session.Session(profile_name=kwargs["profile"])
+            else:
+                self.session = boto3.session.Session()
+
             self.client = self.session.client(
                 "s3",
                 aws_access_key_id=self.access_key,
@@ -315,13 +362,21 @@ class S3ObjectStore(_ObjectStore):
         # so we can just call it here
         self.create_bucket()
 
-    def sub(self, *args):
-        return S3ObjectStore(
-            bucket=self.bucket,
-            prefix=self.join_path(*args),
-            **self.config,
-            client=self.client,
-        )
+    def sub(self, *args, **kwargs):
+
+        if "name" in kwargs or "class_" in kwargs:
+            # We are changing the type, so don't keep the client
+            return super().sub(*args, **kwargs)
+        else:
+            return S3ObjectStore(
+                bucket=self.bucket,
+                prefix=self.prefix if not args else self.join_path(*args),
+                region=self.region,
+                endpoint=self.endpoint,
+                access_key=self.access_key,
+                secret_key=self.secret_key,
+                client=self.client,
+            )
 
     def create_bucket(self):
 
@@ -394,13 +449,15 @@ class S3ObjectStore(_ObjectStore):
                     return body.read()
             elif r.get("ContentType") == "text/plain; charset=utf-8":
                 return body.read().decode("utf8")
+            elif r.get("ContentType") == "text/plain":
+                return body.read().decode("ascii")
             elif r.get("ContentType") == "application/json":
                 return json.loads(body.read().decode("utf8"))
             elif r.get("ContentType") == "application/x-pickle":
                 return pickle.loads(body.read())
             else:
                 raise IOError(
-                    f"Can't understand response for get of {self.bucket}/{self.key}: content-type={r.get('ContentType')}"
+                    f"Can't understand response for get of {self.bucket}/{key}: content-type={r.get('ContentType')}"
                 )
         except self.client.exceptions.NoSuchKey:
             raise KeyError(f"No such key {key} in bucket {self.bucket}")
@@ -418,11 +475,35 @@ class S3ObjectStore(_ObjectStore):
         self.client.delete_object(Bucket=self.bucket, Key=self.join_path(key))
 
     def list(self, prefix: str = "", recursive=True):
-        response = self.client.list_objects(
-            Bucket=self.bucket, Prefix=self.join_path(prefix)
+
+        # Create a reusable Paginator
+        paginator = self.client.get_paginator("list_objects")
+
+        # Create a PageIterator from the Paginator
+        itr = paginator.paginate(Bucket=self.bucket, Prefix=self.join_path(prefix))
+
+        try:
+            for page in itr:
+                for e in page.get("Contents", []):
+                    yield e["Key"].removeprefix(self.prefix).lstrip("/")
+        except Exception:
+            print("Error listing", self.join_pathb(prefix))
+            raise
+
+    def presigned_url(self, key, expiration=60 * 60 * 24 * 7):
+
+        return self.client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self.bucket, "Key": self.join_path(key)},
+            ExpiresIn=expiration,
         )
-        for e in response.get("Contents", []):
-            yield e["Key"].removeprefix(self.prefix).lstrip("/")
+
+    def public_url(self, key):
+        from urllib.parse import urlparse
+
+        host = urlparse(self.client.meta.endpoint_url).netloc
+
+        return f"http://{self.bucket}.{host}/{self.join_path(key)}"
 
     def __str__(self):
         return f"{self.__class__.__name__}({self.bucket}, {self.prefix})"
@@ -509,12 +590,17 @@ class RedisObjectStore(_ObjectStore):
 
         if client is None:
             self.client = connect_redis(url)
+        else:
+            self.client = client
 
-    def join_pathb(self, *args):
-        return self.bucket + "/" + super().join_path(*args)
+    def sub(self, *args, **kwargs):
 
-    def sub(self, *args):
-        return RedisObjectStore(self.bucket, self.join_path(*args), client=self.client)
+        if "name" not in kwargs and "class_" not in kwargs:
+            extra_kwargs = {"client": self.client}
+        else:
+            extra_kwargs = {}
+
+        return super().sub(*args, extra_kwargs=extra_kwargs, **kwargs)
 
     def put(self, key: str, data: bytes):
         return self.client.set(self.join_pathb(key), pickle.dumps(data))
@@ -536,8 +622,11 @@ class RedisObjectStore(_ObjectStore):
         for e in self.client.scan_iter(self.join_pathb("*")):
             yield e.decode("utf8").replace(self.join_pathb(""), "").strip("/")
 
-    def set(self, key: str):
+    def set(self, key: str = "set"):
         return RedisSet(self, key)
+
+    def queue(self, key: str = "queue", max_length=None):
+        return RedisQueue(self, key, max_length=max_length)
 
     def __str__(self):
         return f"{self.__class__.__name__}({self.bucket}, {self.prefix})"
@@ -635,6 +724,13 @@ class RedisSet(ObjectSet):
         self.prefix = os.join_pathb(key)
 
     def add(self, value):
+
+        # If value is iterable, call .add() to add each of the items
+        if isinstance(value, (list, tuple, set)):
+            for v in value:
+                self.add(v)
+            return
+
         return self.redis.sadd(self.prefix, pickle.dumps(value))
 
     def remove(self, value):
@@ -652,6 +748,26 @@ class RedisSet(ObjectSet):
     def get(self):
         return [pickle.loads(e) for e in self.redis.smembers(self.prefix)]
 
+    def pop(self):
+        """Select a random element in the set, remove it, and return it"""
+        r = self.redis.spop(self.prefix)
+        if r is None:
+            return None
+        else:
+            return pickle.loads(r)
+
+    def ipop(self):
+        """A generate that pops from the set"""
+        while True:
+            v = self.pop()
+            if v is None:
+                break
+            yield v
+
+    def move(self, other, value):
+        """Move a value from this set to another set"""
+        return self.redis.smove(self.prefix, other.prefix, pickle.dumps(value))
+
     def __len__(self):
         return self.redis.scard(self.prefix)
 
@@ -661,6 +777,97 @@ class RedisSet(ObjectSet):
     def __iter__(self):
         for e in self.redis.smembers(self.prefix):
             yield pickle.loads(e)
+
+    def clear(self):
+        return self.redis.delete(self.prefix)
+
+
+class RedisQueue(ObjectSet):
+    def __init__(self, os: ObjectStore, key: str, max_length=None):
+        super().__init__(os, key)
+        self.redis = os.client
+        self.prefix = os.join_pathb(key)
+        self.max_length = max_length
+
+    def _return(self, r):
+        try:
+            if r is not None:
+                return pickle.loads(r)
+            else:
+                return r
+        except TypeError:
+            print("!!!!", r[:100])
+            raise
+
+    def push(self, value):
+        r = self.redis.lpush(self.prefix, pickle.dumps(value))
+        if self.max_length is not None:
+            self.redis.ltrim(self.prefix, 0, self.max_length)
+        return r
+
+    def unpush(self):
+        """Remove the last pushed item (pop from the tail)"""
+        return self._return(self.redis.lpop(self.prefix))
+
+    def pop(self):
+        """Pop from the head"""
+        return self._return(self.redis.rpop(self.prefix))
+
+    def ipop(self):
+        """Return an interator that pops from the head"""
+        while True:
+            v = self.pop()
+            if v is None:
+                break
+            yield v
+
+    def bpop(self, timeout=0):
+        """Blocking pop from the head"""
+        r = self.redis.brpop(self.prefix, timeout=timeout)
+        if r is None:
+            return None
+        else:
+            return self._return(r[1])
+
+    def ibpop(self, timeout=0):
+        """Blocking pop from the head"""
+        while True:
+            v = self.bpop(timeout=timeout)
+
+            if v is None:
+                break
+            yield v
+
+    def peek(self):
+        """Peek at the head"""
+        return self._return(self.redis.lrange(self.prefix, -1, -1))
+
+    def is_member(self, value):
+        return self.redis.sismember(self.prefix, pickle.dumps(value))
+
+    def __len__(self):
+        return self.redis.llen(self.prefix)
+
+    def __contains__(self, item):
+        return bool(self.lpos(item))
+
+    def __iter__(self):
+        for i in range(len(self)):
+            e = self.redis.lindex(self.prefix, i)
+            if e is not None:
+                yield pickle.loads(e)
+
+    def tail(self, n=10):
+        for i in range(-1, -n - 1, -1):
+            e = self.redis.lindex(self.prefix, i)
+            if e is not None:
+                yield pickle.loads(e)
+
+    def head(self, n=10):
+        for i in range(0, n, 1):
+            e = self.redis.lindex(self.prefix, i)
+            if e is not None:
+                yield pickle.loads(e)
 
     def clear(self):
         return self.redis.delete(self.prefix)

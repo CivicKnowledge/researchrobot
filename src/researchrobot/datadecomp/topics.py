@@ -7,7 +7,7 @@ from typing import List, Union
 
 import pandas as pd
 
-from researchrobot.openai import openai_one_completion
+from researchrobot.openai.completions import openai_one_completion
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ def _load_file():
     """Read the categories yaml file from the support module"""
     import yaml
 
-    import researchrobot.support as rs
+    import researchrobot.datadecomp.support as rs
 
     rsp = Path(rs.__file__).parent
     cat_p = rsp / "categories.yaml"

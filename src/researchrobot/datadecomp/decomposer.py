@@ -7,7 +7,7 @@ from pathlib import Path
 
 import openai
 
-import researchrobot.openai.prompts as prmpt
+import researchrobot.datadecomp.prompts as prmpt
 
 
 @dataclass
@@ -106,7 +106,7 @@ class Decomposer:
         return prompt.strip()
 
     def decompose(self, question, prompt=None):
-        from researchrobot.openai import openai_one_completion
+        from researchrobot.openai.completions import openai_one_completion
 
         if prompt is None:
             prompt = self.make_question_prompt(question)

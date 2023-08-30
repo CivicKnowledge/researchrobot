@@ -60,7 +60,10 @@ def write_question(d):
 def questions_tasks(mdf):
     """Write data records for generating questions from columns"""
 
-    from researchrobot.openai.census_demo_conditions import random_place, random_time
+    from researchrobot.datadecomp.census_demo_conditions import (
+        random_place,
+        random_time,
+    )
 
     vds = []
 

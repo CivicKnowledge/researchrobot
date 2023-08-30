@@ -1,19 +1,24 @@
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import List, Union
 
+import chromadb
 import numpy as np
 import openai
 import pandas as pd
 from more_itertools import always_iterable, chunked
 from pymilvus import DataType
 from tableintuit import intuit_df
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 from tqdm.auto import tqdm
-
-from .config import config
 
 logger = logging.getLogger(__name__)
 
-from researchrobot.openai.census_demo_conditions import (
+from researchrobot.datadecomp.census_demo_conditions import (
     age_range_terms,
     inv_age_phrases,
     inv_pov_phrases,
@@ -77,9 +82,13 @@ def build_columns_terms_map(df):
     return pd.DataFrame(terms)
 
 
-from openai.embeddings_utils import cosine_similarity
+from openai.error import RateLimitError
 
 
+@retry(
+    wait=wait_exponential(multiplier=1, min=2, max=16),
+    retry=retry_if_exception_type(RateLimitError),
+)
 def get_embeddings(texts, add_spaces=True, normalize=True):
     texts = list(always_iterable(texts))
 
@@ -98,12 +107,18 @@ def get_embeddings(texts, add_spaces=True, normalize=True):
     return ebd
 
 
+@retry(
+    wait=wait_exponential(multiplier=1, min=2, max=16),
+    retry=retry_if_exception_type(RateLimitError),
+)
 def run_embeddings(
     terms: pd.DataFrame,
     text_col: str = "text",
     embeddings_col: str = "embeddings",
     extant_terms=None,
     normalize=True,
+    progress=False,
+    n_jobs=4,
 ):
     from itertools import chain
 
@@ -119,16 +134,18 @@ def run_embeddings(
         texts = [r[text_col] for idx, r in batch.iterrows()]
         return get_embeddings(texts, normalize=normalize)
 
-    results = Parallel(n_jobs=4)(delayed(_f)(batch) for batch in tqdm(batched_terms))
+    if progress:
+        pb = tqdm(batched_terms, desc="embedding", leave=True)
+    else:
+        pb = batched_terms
+
+    results = Parallel(n_jobs=n_jobs)(delayed(_f)(batch) for batch in pb)
 
     keys, embeds = list(zip(*list(chain(*results))))
     terms = terms.copy()
     terms[embeddings_col] = [np.array(e) for e in embeds]
 
     return terms
-
-
-from langchain.vectorstores import Milvus
 
 
 class EmbedDb:
@@ -138,17 +155,16 @@ class EmbedDb:
         float: DataType.FLOAT,
     }
 
-    def __init__(self, collection_name: str):
+    def __init__(
+        self, collection_name: str, host=None, port=19530, alias="default", **kwargs
+    ):
         from pymilvus import connections, utility
 
         self.name = collection_name
         self.embeddings_col = None
+        self.text_col = "text"
 
-        connections.connect(
-            config["MILVUS_ALIAS"],
-            host=config["MILVUS_HOST"],
-            port=config["MILVUS_PORT"],
-        )
+        connections.connect(alias=alias, host=host, post=port)
 
         self._table_intition = None
 
@@ -198,7 +214,11 @@ class EmbedDb:
         ]
 
         for batch in tqdm(batched_terms):
-            dq_coll.insert(batch[cols])
+            try:
+                dq_coll.insert(batch[cols])
+            except:
+                print(batch[cols])
+                raise
 
         self.build_index()
 
@@ -270,7 +290,7 @@ class EmbedDb:
 
             elif col.resolved_type == str:
 
-                max_len = df[col.header].str.len().max() + 1
+                max_len = int(df[col.header].str.len().max() + 1)
 
                 fields.append(
                     FieldSchema(
@@ -348,15 +368,7 @@ class EmbedDb:
         dq_coll.release()
         dq_coll.drop_index()
 
-    def _vector_query(self, terms, add_spaces=True, expr=None, limit=20):
-
-        if isinstance(terms, str):
-            terms = terms.split(",")
-
-        if add_spaces:
-            terms = [" " + term.strip().lower() + " " for term in terms]
-
-        vectors = [e[1] for e in get_embeddings(terms)]
+    def _vector_query(self, vectors, expr=None, limit=20):
 
         ec = self.embeddings_col
 
@@ -382,22 +394,50 @@ class EmbedDb:
 
         return result
 
-    def vector_query(self, terms, add_spaces=True, expr=None, limit=20):
+    def vector_query(self, qdf, expr=None, limit=20, progress=False):
 
-        result = self._vector_query(terms, add_spaces, expr=expr, limit=limit)
+        n = 10000  # chunk row size
 
-        hits = []
-        for term, term_hits in zip(terms, result):
+        if len(qdf) > n:
+            # If the query frame is tool large, break it into chunks
+            # and run the query on each chunk.
+            chunks = [qdf[i : i + n] for i in range(0, qdf.shape[0], n)]
 
-            for hit in term_hits:
-                d = {
-                    "query": term,
-                    "score": hit.score,
-                }
-                d.update({e: hit.entity.get(e) for e in hit.entity.fields})
+            frames = [
+                self.vector_query(c, expr=expr, limit=limit, progress=progress)
+                for c in chunks
+            ]
 
-                hits.append(d)
+            return pd.concat(frames)
 
-        hits_df = pd.DataFrame(hits)
+        else:
 
-        return hits_df
+            if not isinstance(qdf, pd.DataFrame):
+                qdf = pd.DataFrame({"text": qdf})
+
+            if "embeddings" in list(qdf.columns):
+                edf = qdf
+            else:
+                edf = run_embeddings(
+                    qdf,
+                    text_col=self.text_col,
+                    embeddings_col=self.embeddings_col,
+                    progress=progress,
+                )
+
+            result = self._vector_query(
+                np.stack(edf[self.embeddings_col]), expr=expr, limit=limit
+            )
+
+            rows = []
+            for hits in result:
+
+                for hit in hits:
+                    d = {
+                        "score": hit.score,
+                    }
+                    d.update({e: hit.entity.get(e) for e in hit.entity.fields})
+
+                    rows.append(d)
+
+            return pd.DataFrame(rows)

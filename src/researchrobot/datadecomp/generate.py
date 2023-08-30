@@ -77,7 +77,7 @@ class Question:
 
     def rewrite(self):
         """Have GPT rewrite the question to be more grammatical"""
-        from researchrobot.openai import openai_one_completion
+        from researchrobot.openai.completions import openai_one_completion
 
         prompt_tmpl = """Rewrite the following question to be more grammatical and easier to read.
 

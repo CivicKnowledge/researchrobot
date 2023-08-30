@@ -31,7 +31,8 @@ dependencies = [
     "tqdm",
     "boto3",
     "pyyaml",
-    "msgpack"
+    "msgpack",
+    "openai-async"
 ]
 
 classifiers = [

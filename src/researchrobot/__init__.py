@@ -29,5 +29,5 @@ def require_version(version: str):
         )
 
 
-from .download import cache_dl, make_cache_dl
-from .objectstore import ObjectStore
+from .download import cache_dl
+from .objectstore import ObjectStore, oscache
