@@ -7,7 +7,6 @@ import openai
 import pandas as pd
 from more_itertools import always_iterable, chunked
 from pymilvus import DataType
-from tableintuit import intuit_df
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -246,6 +245,8 @@ class EmbedDb:
         self,
         df: Union[pd.DataFrame, List[str]],
     ) -> str:
+
+        from tableintuit import intuit_df
 
         if isinstance(df, list):
             return None
