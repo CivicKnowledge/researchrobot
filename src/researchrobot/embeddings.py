@@ -11,6 +11,7 @@ from tenacity import (
     retry,
     retry_if_exception_type,
     stop_after_attempt,
+    stop_after_delay,
     wait_exponential,
 )
 from tqdm.auto import tqdm
@@ -85,8 +86,9 @@ from openai.error import RateLimitError
 
 
 @retry(
-    wait=wait_exponential(multiplier=1, min=2, max=16),
+    wait=wait_exponential(multiplier=1, min=1, max=32),
     retry=retry_if_exception_type(RateLimitError),
+    stop=(stop_after_delay(60 * 3) | stop_after_attempt(10)),
 )
 def get_embeddings(texts, add_spaces=True, normalize=True):
     texts = list(always_iterable(texts))
@@ -107,7 +109,7 @@ def get_embeddings(texts, add_spaces=True, normalize=True):
 
 
 @retry(
-    wait=wait_exponential(multiplier=1, min=2, max=16),
+    wait=wait_exponential(multiplier=1, min=5, max=30),
     retry=retry_if_exception_type(RateLimitError),
 )
 def run_embeddings(
@@ -127,14 +129,12 @@ def run_embeddings(
         pd.DataFrame(e) for e in chunked(terms.to_dict(orient="records"), 200)
     ]
 
-    # batched_terms = [terms[i:i + 100] for i in range(0, len(terms), 100)]
-
     def _f(batch):
         texts = [r[text_col] for idx, r in batch.iterrows()]
         return get_embeddings(texts, normalize=normalize)
 
     if progress:
-        pb = tqdm(batched_terms, desc="embedding", leave=True)
+        pb = tqdm(batched_terms, desc=f"embedding {terms.iloc[0].index}", leave=False)
     else:
         pb = batched_terms
 

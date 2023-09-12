@@ -480,7 +480,15 @@ class S3ObjectStore(_ObjectStore):
         paginator = self.client.get_paginator("list_objects")
 
         # Create a PageIterator from the Paginator
-        itr = paginator.paginate(Bucket=self.bucket, Prefix=self.join_path(prefix))
+
+        prefix = self.join_path(prefix)
+
+        if prefix.endswith("*"):
+            prefix = prefix[:-1]
+        elif not prefix.endswith("/"):
+            prefix = prefix + "/"
+
+        itr = paginator.paginate(Bucket=self.bucket, Prefix=prefix)
 
         try:
             for page in itr:
@@ -595,15 +603,6 @@ class RedisObjectStore(_ObjectStore):
 
     def sub(self, *args, **kwargs):
 
-        if "name" not in kwargs and "class_" not in kwargs:
-            extra_kwargs = {"client": self.client}
-        else:
-            extra_kwargs = {}
-
-        return super().sub(*args, extra_kwargs=extra_kwargs, **kwargs)
-
-    def sub(self, *args, **kwargs):
-
         if "name" in kwargs or "class_" in kwargs:
             # We are changing the type, so don't keep the client
             return super().sub(*args, **kwargs)
@@ -634,6 +633,8 @@ class RedisObjectStore(_ObjectStore):
     def delete(self, key: str):
         self.client.delete(self.join_pathb(key))
 
+    # Object Handlers
+
     def list(self, prefix: str = "", recursive=True) -> list:
         for e in self.client.scan_iter(self.join_pathb("*")):
             yield e.decode("utf8").replace(self.join_pathb(""), "").strip("/")
@@ -643,6 +644,10 @@ class RedisObjectStore(_ObjectStore):
 
     def queue(self, key: str = "queue", max_length=None):
         return RedisQueue(self, key, max_length=max_length)
+
+    @property
+    def cmd(self):
+        return RedisCmd(self, self.prefix)
 
     def __str__(self):
         return f"{self.__class__.__name__}({self.bucket}, {self.prefix})"
@@ -887,3 +892,19 @@ class RedisQueue(ObjectSet):
 
     def clear(self):
         return self.redis.delete(self.prefix)
+
+
+class RedisCmd:
+    """Provides a call interface that passes commands to the redis client
+    self.client, using the key of self.prefix as the first argument"""
+
+    def __init__(self, os, key_prefix: str):
+        self.os = os
+        self.client = os.client
+        self.prefix = key_prefix
+
+    def __getattr__(self, item):
+        def _(key, *args, **kwargs):
+            return getattr(self.client, item)(self.prefix + "/" + key, *args, **kwargs)
+
+        return _
