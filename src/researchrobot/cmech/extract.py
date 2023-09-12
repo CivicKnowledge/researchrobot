@@ -14,19 +14,31 @@ anglo_countries = [
 ]
 
 
-def iter_source(rc, source_key, pb=None):
+def iter_source_cache(rc, source_key, pb=None):
     """Iterate over profiles in a source file stored in the cache"""
-    if pb is None:
-        pb = lambda x: x
 
     s = rc[source_key]
 
-    for source_idx, l in pb(enumerate(s.splitlines())):
+    for source_idx, l in enumerate(s.splitlines()):
         o = json.loads(l)
         o["_source_key"] = source_key
         o["_source_line"] = source_idx
 
         yield o
+
+
+def iter_source_path(path, pb=None):
+    """Iterate over profiles in a source file stored in the cache"""
+
+    import gzip
+
+    with gzip.open(path, "rt") as f:
+        for source_idx, l in enumerate(f):
+            o = json.loads(l)
+            o["_source_key"] = path.stem
+            o["_source_line"] = source_idx
+
+            yield o
 
 
 @dataclass
