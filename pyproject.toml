@@ -12,7 +12,7 @@ version_scheme = "guess-next-dev"
 
 [project]
 name = "researchrobot"
-version = "0.1.4"
+version = "0.1.6"
 
 description = "Research Robot AI Dataset query system"
 readme = "README.md"
