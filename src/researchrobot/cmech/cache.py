@@ -6,6 +6,9 @@ from researchrobot.objectstore import RedisObjectStore, S3ObjectStore
 # A dataclass for the return values from get_classification_queues
 @dataclass
 class ClassificationQueues:
+
+    redis: RedisObjectStore  # The redis object store
+
     sources: S3ObjectStore  # All sources
     profiles: S3ObjectStore  # Selected profiles
 
@@ -43,5 +46,5 @@ def get_classification_queues(rc, version=2):
     log = redis_os.queue("log", max_length=1000)
 
     return ClassificationQueues(
-        sources, profiles, rce, chunks, parts, tasks, inprocess, complete, stats, log
+        redis_os, sources, profiles, rce, chunks, parts, tasks, inprocess, complete, stats, log
     )

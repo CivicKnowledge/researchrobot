@@ -134,7 +134,7 @@ def run_embeddings(
         return get_embeddings(texts, normalize=normalize)
 
     if progress:
-        pb = tqdm(batched_terms, desc=f"embedding {terms.iloc[0].index}", leave=False)
+        pb = tqdm(batched_terms, desc=f"embedding {terms.index[0]}", leave=False)
     else:
         pb = batched_terms
 

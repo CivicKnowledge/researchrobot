@@ -7,6 +7,7 @@ import pickle
 import shelve
 import sys
 from pathlib import Path, PosixPath
+from slugify import slugify
 
 from .config import get_config
 
@@ -518,6 +519,7 @@ class S3ObjectStore(_ObjectStore):
 
 
 class LocalObjectStore(_ObjectStore):
+    """Local cache using a Shelve database"""
     def __init__(
         self, bucket: str = None, prefix: str = None, path: str = None, **kwargs
     ):
@@ -562,6 +564,111 @@ class LocalObjectStore(_ObjectStore):
         for key in self._list():
             if key.startswith(prefix):
                 yield key.removeprefix(prefix)
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({self.path}; {self.bucket}; {self.prefix})"
+
+class LocalLargeObjectStore(LocalObjectStore):
+    """Like LocalObjectStore, but uses a directory of files in addition to the shelve
+    database; it overrids the put and get methods to use the file system, storing references to
+    files in the parent class shelve database """
+
+    def __init__(self, bucket: str = None, prefix: str = None, path: str = None, **kwargs):
+
+        super().__init__(bucket=bucket, prefix=prefix, path=path, **kwargs)
+
+    def put(self, key: str, data: bytes):
+        """Store data in the file system, and store a reference to the file in the shelve database"""
+
+        b, size, content_type, ext = _to_bytes(data)
+
+        if size > 1024 * 1024 * 10:
+            # If the file is large, store it in the file system
+            file_path = Path(self.path).joinpath(slugify(key))
+
+            if not file_path.parent.exists():
+                file_path.parent.mkdir(parents=True)
+
+            # pickle the data to the file
+            file_path.write_bytes(pickle.dumps(data))
+
+            data = file_path
+
+
+    def get(self, key: str) -> bytes:
+        """Get data from the file system, or from the shelve database"""
+
+        o = super().get(key)
+
+        if isinstance(o, PosixPath):
+            # unpickle
+            return pickle.loads(o.read_bytes())
+
+        else:
+            return o
+
+
+    def delete(self, key: str):
+
+        file_path = Path(self.path).joinpath(slugify(key))
+
+        if file_path.exists():
+            file_path.unlink()
+
+        super().delete(key)
+
+class FSObjectStore(LocalObjectStore):
+    """An object store that only uses the file system, making it
+    useful for multiprocessing"""
+
+    def __init__(
+        self, bucket: str = None, prefix: str = None, path: str = None, **kwargs
+    ):
+
+        self.bucket = bucket
+        self.prefix = prefix or ""
+
+        super().__init__(bucket=bucket, prefix=prefix, path=path, **kwargs)
+
+        path = Path(path)
+
+        if not path.exists():
+            path.mkdir(parents=True)
+
+        self.path = str(path / self.bucket)
+
+    def _file_path(self, key):
+        return Path(self.path).joinpath(key)
+
+    def put(self, key: str, data: bytes):
+        # If the file is large, store it in the file system
+        file_path = self._file_path(key)
+
+        if not file_path.parent.exists():
+            file_path.parent.mkdir(parents=True)
+
+        # pickle the data to the file
+        file_path.write_bytes(pickle.dumps(data))
+
+    def get(self, key: str) -> bytes:
+        if not self.exists(key):
+            raise KeyError(f"No such key {key} in bucket {self.bucket}")
+
+        file_path = self._file_path(key)
+        return pickle.loads(file_path.read_bytes())
+
+    def exists(self, key: str) -> bool:
+        return self._file_path(key).exists()
+
+    def delete(self, key: str):
+        return self._file_path(key).unlink()
+
+    def list(self, prefix: str = "", recursive=True) -> list:
+
+        path = Path(self.path)
+
+        for file_path in path.joinpath(prefix).glob("**/*"):
+            yield str(file_path.relative_to(path))
 
     def __str__(self):
         return f"{self.__class__.__name__}({self.path}; {self.bucket}; {self.prefix})"
@@ -744,15 +851,19 @@ class RedisSet(ObjectSet):
         self.redis = os.client
         self.prefix = os.join_pathb(key)
 
-    def add(self, value):
+    def add(self, value, score=None):
 
         # If value is iterable, call .add() to add each of the items
         if isinstance(value, (list, tuple, set)):
             for v in value:
-                self.add(v)
+                self.add(v, score)
             return
 
-        return self.redis.sadd(self.prefix, pickle.dumps(value))
+        if score is not None:
+
+            return self.redis.zadd(self.prefix, {pickle.dumps(value): score})
+        else:
+            return self.redis.sadd(self.prefix, pickle.dumps(value))
 
     def remove(self, value):
         return self.redis.srem(self.prefix, pickle.dumps(value))
@@ -797,6 +908,10 @@ class RedisSet(ObjectSet):
 
     def __iter__(self):
         for e in self.redis.smembers(self.prefix):
+            yield pickle.loads(e)
+
+    def ziter(self):
+        for e in self.redis.zrange(self.prefix, 0, -1):
             yield pickle.loads(e)
 
     def clear(self):
