@@ -26,17 +26,24 @@ class SOCClassifier:
                  whoosh_dir=None):
 
         # use the default package if the user doesn't specify one
-        titles_pkg_url = titles_pkg_url or soc_titles_pkg_default
-        embed_pkg_url = embed_pkg_url or soc_embed_pkd_default
+        self.titles_pkg_url = titles_pkg_url or soc_titles_pkg_default
+        self.embed_pkg_url = embed_pkg_url or soc_embed_pkd_default
 
-        # load the packages
-        self.titles_pkg = open_package(titles_pkg_url)
-        self.embed_pkg = open_package(embed_pkg_url)
+
 
         self.whoosh_dir = Path(whoosh_dir) if whoosh_dir else Path('./.whoosh')
 
         if not self.whoosh_dir.exists():
             self.whoosh_dir.mkdir(parents=True)
+
+    @cached_property
+    def embed_pkg(self):
+        return open_package(self.embed_pkg_url)
+
+    @cached_property
+    def titles_pkg(self):
+        return open_package(self.titles_pkg_url)
+
 
     @cached_property
     def occ_df(self):
@@ -48,10 +55,28 @@ class SOCClassifier:
 
     @cached_property
     def embed_df(self):
-        mean_ebd = self.embed_pkg.resource('mean_ebd').dataframe()
-        mean_ebd['embeddings'] = mean_ebd.embeddings.apply(json.loads)
 
-        return mean_ebd
+        def rebuild_embd(v):
+            return np.array(json.loads(v))
+
+        rwe = self.embed_pkg.resource('onet_occupations').dataframe()
+        rwe['embeddings'] = rwe.embeddings.apply(rebuild_embd)
+        return rwe
+
+        oce = self.embed_pkg.resource('onet_rewrites').dataframe()
+        oce['embeddings'] = oce.embeddings.apply(rebuild_embd)
+
+        return oce
+
+        def mean_embed(g):
+            return np.mean(g.embeddings.values)
+
+        a = rwe.groupby('soc').apply(mean_embed).to_frame('embeddings')
+        b = oce.groupby('soc').apply(mean_embed).to_frame('embeddings')
+
+        mean_embd = pd.concat([a,b]).groupby('soc').apply(mean_embed).to_frame('embeddings').reset_index()
+
+        return mean_embd
 
     @cached_property
     def titles_df(self):
@@ -143,18 +168,18 @@ class SOCClassifier:
 
             rows = []
             for r in results:
-                rows.append({'soc': r['soc'], 'score': r.score, 'alt_title': r['title'],
+                rows.append({'soc': r['soc'],
+                             'score': r.score,
+                             'alt_title': r['title'],
                              'soc_title': self.title_map.get(r['soc'])})
 
             t = pd.DataFrame(rows)
 
             if len(t) > 0:
-                t['score'] = t.score / t.score.max()
 
-                return t[t.score > .8].iloc[:5]
+                return t[t.score > .8].iloc[:10]
             else:
-                return t
-
+                return pd.DataFrame([], columns=['soc','score','alt_title','soc_title'])
 
     def search_embed(self, q_df, nhits=30) -> list[dict[str, Any]]:
         """Find the top SOC codes for a query dataframe, using embeddings"""
@@ -179,13 +204,16 @@ class SOCClassifier:
 
                 hits.append(m_row.to_dict())
 
-            hits_df = pd.DataFrame(hits).sort_values('score', ascending=False).reset_index().drop_duplicates(subset=['soc'])
+            hits_df = pd.DataFrame(hits)\
+                .sort_values('score', ascending=False)\
+                .drop_duplicates(subset=['soc'])
+
             mhits_df = pd.DataFrame(hits) \
                 .groupby('soc') \
                 .agg({'score': ['mean', 'count']}) \
                 .set_axis(['score', 'score_count'], axis=1) \
                 .sort_values('score', ascending=False) \
-                .reset_index()
+
             d = {
                 'q_idx': idx,
                 'q_row': r,
@@ -204,18 +232,38 @@ class SOCClassifier:
         returned are added together per SOC, so if the set of hits has more than
         one occurance of an SOC, the total score from this function can be larger than 2. """
 
-        from collections import defaultdict
+        from sklearn.preprocessing import MinMaxScaler
 
-        h = self.search_title(title)
+        scaler = MinMaxScaler(feature_range=(.40, 1))
 
-        d = defaultdict(float)
+        # title hits
+        th = self.search_title(title).rename(columns={'score': 'title_score'})
 
-        for idx, r in h.iterrows():
-            d[r.soc] += r.score
+        alt_title_map = {r.soc: r.alt_title for idx, r in th.iterrows()}
 
+        th = th[['soc','title_score']].groupby('soc').agg({'title_score': 'sum'}).reset_index()
+
+        # body hits
         z = self.search_embed(embed)[0]
+        bh = z['hits'].rename(columns={'score': 'body_score'})
+        bs_max = bh.body_score.max()
 
-        for idx, r in z['hits'].iterrows():
-            d[r.soc] += r.score
+        bh = bh[['soc','body_score']].groupby('soc').agg({'body_score': 'sum'}).reset_index()
 
-        return dict(reversed(sorted(d.items(), key=lambda x: x[1])))
+        df = th[['soc','title_score']].merge(bh, on='soc', how='outer')
+
+        # The second fillna() handles the case where all of the series is nan,
+        # in which case the first fillna() will not fill anything because of the nan
+        # in .min()
+        df['body_score'] = df['body_score'].fillna(df['body_score'].min() / 2).fillna(.1)
+        df['title_score'] = df['title_score'].fillna(df['title_score'].min() / 2).fillna(.1)
+
+        df['alt_title'] = df.soc.apply(lambda v: alt_title_map.get(v))
+        df['soc_title'] = df.soc.apply(lambda v: self.title_map.get(v))
+
+        df['body_score_scaled'] = scaler.fit_transform(df[['body_score']])
+        df['title_score_scaled'] = scaler.fit_transform(df[['title_score']])
+
+        df['score'] = ((df.body_score_scaled+.25) * df.title_score_scaled)/1.25
+
+        return df.sort_values('score', ascending=False)

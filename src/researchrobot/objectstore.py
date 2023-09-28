@@ -852,6 +852,14 @@ class RedisSet(ObjectSet):
         self.prefix = os.join_pathb(key)
 
     def add(self, value, score=None):
+        """ Add a value to the set, with an optional score
+        :param value: The value to add to the set
+        :type value: Any
+        :param score: An optional score to be used for sorting
+        :type score: float
+        :return:
+        :rtype:
+        """
 
         # If value is iterable, call .add() to add each of the items
         if isinstance(value, (list, tuple, set)):
@@ -889,7 +897,7 @@ class RedisSet(ObjectSet):
             return pickle.loads(r)
 
     def ipop(self):
-        """A generate that pops from the set"""
+        """A generator that pops from the set"""
         while True:
             v = self.pop()
             if v is None:
@@ -919,8 +927,13 @@ class RedisSet(ObjectSet):
 
 
 class RedisQueue(ObjectSet):
+    """A queue implemented using a redis list, with an optional maximum length.
+    """
+
+
     def __init__(self, os: ObjectStore, key: str, max_length=None):
         super().__init__(os, key)
+
         self.redis = os.client
         self.prefix = os.join_pathb(key)
         self.max_length = max_length
