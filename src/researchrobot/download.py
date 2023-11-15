@@ -73,6 +73,9 @@ def s3_download(url, directory, force=False):
 
         s3.download_file(bucket, key, str(filepath), Callback=pb.update)
 
+        bucket, key = up.netloc, up.path.lstrip("/")
+        s3.download_file(bucket, key, '.')
+
         return filepath
 
 

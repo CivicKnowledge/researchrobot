@@ -1,13 +1,17 @@
 import logging
 from typing import List, Union
 
-import chromadb
+
 import numpy as np
 import openai
 import pandas as pd
 from more_itertools import always_iterable, chunked
-from pymilvus import DataType
+import asyncio
+import openai_async
+from openai import OpenAI
+
 from tenacity import (
+    AsyncRetrying,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -15,6 +19,12 @@ from tenacity import (
     wait_exponential,
 )
 from tqdm.auto import tqdm
+
+# No idea what is going on here.
+try:
+    from openai import RateLimitError
+except ImportError:
+    from openai.error import RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -81,45 +91,41 @@ def build_columns_terms_map(df):
 
     return pd.DataFrame(terms)
 
-
-from openai.error import RateLimitError
-
-
-@retry(
+retry_config = dict(
     wait=wait_exponential(multiplier=1, min=1, max=32),
     retry=retry_if_exception_type(RateLimitError),
-    stop=(stop_after_delay(60 * 3) | stop_after_attempt(10)),
-)
+    stop=(stop_after_delay(60 * 3) | stop_after_attempt(10)) )
+
+@retry(**retry_config)
 def get_embeddings(texts, add_spaces=True, normalize=True):
+
+    client = OpenAI()
+
     texts = list(always_iterable(texts))
 
     if add_spaces:
         texts = [" " + text.strip() + " " for text in texts]
 
-    embedding = openai.Embedding.create(input=texts, engine="text-embedding-ada-002")
+    response = client.embeddings.create(input=texts, model="text-embedding-ada-002")
 
     if normalize:
         normalize = lambda x: x / np.linalg.norm(x, ord=2)
     else:
         normalize = lambda x: x
 
-    ebd = [(t, normalize(e["embedding"])) for t, e in zip(texts, embedding["data"])]
+    ebd = [(t, normalize(e.embedding)) for t, e in zip(texts, response.data)]
 
     return ebd
 
-
-@retry(
-    wait=wait_exponential(multiplier=1, min=5, max=30),
-    retry=retry_if_exception_type(RateLimitError),
-)
+@retry(**retry_config)
 def run_embeddings(
-    terms: pd.DataFrame,
-    text_col: str = "text",
-    embeddings_col: str = "embeddings",
-    extant_terms=None,
-    normalize=True,
-    progress=False,
-    n_jobs=4,
+        terms: pd.DataFrame,
+        text_col: str = "text",
+        embeddings_col: str = "embeddings",
+        extant_terms=None,
+        normalize=True,
+        progress=False,
+        n_jobs=2,
 ):
     from itertools import chain
 
@@ -147,21 +153,143 @@ def run_embeddings(
     return terms
 
 
+class EmbeddingsAsync:
+    """Fetch embeddings for a dataframe of text using OpenAI's API, making
+    mutiple asyncio calls in parallel. Works basically the same as run_embeddings,
+    but with asyncio"""
+
+    def __init__(self, df, text_col: str = "text", embeddings_col: str = "embeddings",
+                 concurrency=2, chunk_size=200, normalize=True, progress=False,
+                 cache = None):
+
+        self.df = df
+        self.text_col = text_col
+        self.embeddings_col = embeddings_col
+        self.normalize = normalize
+        self.concurrency = concurrency
+        self.chunk_size = chunk_size
+        self.progress = progress
+        self.semaphore = asyncio.Semaphore(self.concurrency)
+        self.index_chunks = list(chunked(list(self.df.index), self.chunk_size))
+        self.cache = cache
+
+        self.completed_chunks = {}
+        self.errors = {}
+
+        self.no_op = False
+
+        logger.debug(f"EA Init")
+
+    async def get_embeddings(self, chunk_n, df):
+
+        import os
+
+        df = df.copy()
+        chunk_key = f'embd-{chunk_n}-{min(df.index)}-{max(df.index)}'
+
+        if chunk_key in self.cache:
+            edf = self.cache[chunk_key]
+            self.completed_chunks[chunk_n] = edf
+            logger.debug(f"Using cached embeddings for chunk {chunk_key}")
+            return edf
+
+        model_name = 'text-embedding-ada-002'
+
+        inp = df[self.text_col].to_list()
+
+        async for attempt in AsyncRetrying(**retry_config):
+            with attempt:
+                try:
+                    resp = await openai_async.embeddings(
+                        api_key=os.environ["OPENAI_API_KEY"],
+                        timeout=2,
+                        payload={"model": model_name, "input": inp},
+                    )
+
+                    response = resp.json()
+
+                    if 'error' in response:
+                        if 'Rate' in response['error']['message']:
+                            raise RateLimitError(response['error']['message'])
+
+                    if not 'data' in response:
+                        raise Exception(f'No data in response')
+
+                except RateLimitError as e:
+                    raise
+                except Exception as e:
+                    self.errors[chunk_n] =  (e, None, chunk_n, df)
+                    logger.debug(f"Error getting embeddings for chunk {chunk_key}: {e}")
+                    return None
+
+                if self.normalize:
+                    normalize = lambda x: x / np.linalg.norm(x, ord=2)
+                else:
+                    normalize = lambda x: x
+
+                try:
+                    df[self.embeddings_col] = [normalize(e["embedding"]) for e in response["data"]]
+                except KeyError as e:
+                    self.errors[chunk_n] = (e, response, chunk_n, df)
+                    logger.debug(f"Error normalizing embeddings for chunk {chunk_key}: {e}")
+                    return None
+
+        self.completed_chunks[chunk_n] = df
+
+        if self.cache is not None:
+            self.cache[chunk_key] = df
+
+        if chunk_n in self.errors:
+            del self.errors[chunk_n]
+
+        logger.debug(f"Completed {chunk_key}")
+
+        return df
+
+    async def worker(self, chunk_n, text_chunk):
+
+        if chunk_n in self.completed_chunks:
+            return
+
+        async with self.semaphore:
+            return await self.get_embeddings(chunk_n, text_chunk)
+
+
+
+    async def run(self):
+        from tqdm.asyncio import tqdm
+
+        tasks = [self.worker(chunk_n, self.df.loc[chunk])
+                 for chunk_n, chunk in enumerate(self.index_chunks)]
+
+        if self.progress:
+            await tqdm.gather(*tasks)
+        else:
+            await asyncio.gather(*tasks)
+
+        return len(self.errors) == 0
+
+    @property
+    def results_df(self):
+        return pd.concat(self.completed_chunks.values()).sort_values(['pid', 'exp_id'])
+
+
 class EmbedDb:
-    schema_map = {
-        str: DataType.VARCHAR,
-        int: DataType.INT64,
-        float: DataType.FLOAT,
-    }
 
     def __init__(
-        self, collection_name: str, host=None, port=19530, alias="default", **kwargs
+            self, collection_name: str, host=None, port=19530, alias="default", **kwargs
     ):
         from pymilvus import connections, utility
 
         self.name = collection_name
         self.embeddings_col = None
         self.text_col = "text"
+
+        self.schema_map = {
+            str: DataType.VARCHAR,
+            int: DataType.INT64,
+            float: DataType.FLOAT,
+        }
 
         connections.connect(alias=alias, host=host, post=port)
 
@@ -191,11 +319,11 @@ class EmbedDb:
         }
 
     def load_collection(
-        self,
-        df: Union[pd.DataFrame, List[str]],
-        embeddings_col="embeddings",
-        text_col="text",
-        drop=False,
+            self,
+            df: Union[pd.DataFrame, List[str]],
+            embeddings_col="embeddings",
+            text_col="text",
+            drop=False,
     ):
 
         df = self._maybe_run_embeddings(
@@ -224,10 +352,10 @@ class EmbedDb:
         return dq_coll
 
     def _maybe_run_embeddings(
-        self,
-        df: Union[pd.DataFrame, List[str]],
-        embeddings_col="embeddings",
-        text_col="text",
+            self,
+            df: Union[pd.DataFrame, List[str]],
+            embeddings_col="embeddings",
+            text_col="text",
     ):
 
         ec = self._get_embedding_col(df)
@@ -242,8 +370,8 @@ class EmbedDb:
         return df
 
     def _get_embedding_col(
-        self,
-        df: Union[pd.DataFrame, List[str]],
+            self,
+            df: Union[pd.DataFrame, List[str]],
     ) -> str:
 
         from tableintuit import intuit_df
@@ -402,7 +530,7 @@ class EmbedDb:
         if len(qdf) > n:
             # If the query frame is tool large, break it into chunks
             # and run the query on each chunk.
-            chunks = [qdf[i : i + n] for i in range(0, qdf.shape[0], n)]
+            chunks = [qdf[i: i + n] for i in range(0, qdf.shape[0], n)]
 
             frames = [
                 self.vector_query(c, expr=expr, limit=limit, progress=progress)

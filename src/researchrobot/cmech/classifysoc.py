@@ -1,94 +1,74 @@
-""" Classify text using Standard Occupation Codes
+""" Classify text using Standard Occupation Codes, using Whoosh for
+full text search and local cosine distances
 """
-from typing import List, Dict, Any
-
-from metapack import open_package
+import json
+from functools import cached_property
 from pathlib import Path
+from typing import Any
+from typing import Union
+import logging
+from tqdm.auto import tqdm
+from joblib import Parallel, delayed
+
+import numpy as np
+import pandas as pd
+from metapack import open_package
+from sklearn.metrics.pairwise import cosine_similarity
 from whoosh import index
-from whoosh.index import open_dir, create_in, EmptyIndexError
 from whoosh.fields import *
-from whoosh.qparser import QueryParser, FuzzyTermPlugin, PhrasePlugin, SequencePlugin
+from whoosh.index import open_dir, EmptyIndexError
+from whoosh.qparser import QueryParser
 from whoosh.query import FuzzyTerm
 
-import pandas as pd
-import numpy as np
-import json
-from sklearn.metrics.pairwise import cosine_similarity
+from researchrobot import ObjectStore
+from researchrobot.cmech.cache import get_classification_queues
 
-from functools import cached_property
+soc_titles_pkg_default = 's3://linkedin.civicknowledge.com/packages/civicknowledge.com-onet_soc_db-1.2.1.csv'
+soc_embed_pkd_default = 's3://linkedin.civicknowledge.com/packages/civicknowledge.com-onet_soc-embed-1.2.4.csv'
 
-soc_titles_pkg_default = 'index:civicknowledge.com-onet_soc_db'
-soc_embed_pkd_default = 'index:civicknowledge.com-onet_soc-embed'
+logger = logging.getLogger(__name__)
+
 
 class SOCClassifier:
-    def __init__(self, titles_pkg_url=None,
-                 embed_pkg_url=None,
-                 whoosh_dir=None):
 
+    @classmethod
+    def get_data(cls, titles_pkg_url=None, embed_pkg_url=None ):
         # use the default package if the user doesn't specify one
-        self.titles_pkg_url = titles_pkg_url or soc_titles_pkg_default
-        self.embed_pkg_url = embed_pkg_url or soc_embed_pkd_default
+        titles_pkg_url = titles_pkg_url or soc_titles_pkg_default
+        titles_okg = open_package(titles_pkg_url)
+        occ = titles_pkg.reference('onet_occ').dataframe()
+        occ.columns = ['soc', 'title', 'desc']
 
+        titles = self.titles_pkg.resource('titles').dataframe()
 
+        bob = fooarber
+        
+
+        embed_pkg_url = embed_pkg_url or soc_embed_pkd_default
+        embed_pkg = open_package(embed_pkg_url)
+        def rebuild_embd(v):
+            return np.array(json.loads(v))
+
+        rwe = embed_pkg.resource('onet_occupations').dataframe()
+        rwe['embeddings'] = rwe.embeddings.apply(rebuild_embd)
+
+        title_map = {r.soc: r.title for idx, r in self.embd_df.iterrows()}
+
+        return {
+            'occ': occ,
+            'titles': titles,
+            'embed': rwe,
+            'title_map': title_map
+        }
+
+    def __init__(self,
+                 whoosh_dir=None):
 
         self.whoosh_dir = Path(whoosh_dir) if whoosh_dir else Path('./.whoosh')
 
         if not self.whoosh_dir.exists():
             self.whoosh_dir.mkdir(parents=True)
 
-    @cached_property
-    def embed_pkg(self):
-        return open_package(self.embed_pkg_url)
-
-    @cached_property
-    def titles_pkg(self):
-        return open_package(self.titles_pkg_url)
-
-
-    @cached_property
-    def occ_df(self):
-
-        occ = self.titles_pkg.reference('onet_occ').dataframe()
-        occ.columns = ['soc', 'title', 'desc']
-
-        return occ
-
-    @cached_property
-    def embed_df(self):
-
-        def rebuild_embd(v):
-            return np.array(json.loads(v))
-
-        rwe = self.embed_pkg.resource('onet_occupations').dataframe()
-        rwe['embeddings'] = rwe.embeddings.apply(rebuild_embd)
-        return rwe
-
-        oce = self.embed_pkg.resource('onet_rewrites').dataframe()
-        oce['embeddings'] = oce.embeddings.apply(rebuild_embd)
-
-        return oce
-
-        def mean_embed(g):
-            return np.mean(g.embeddings.values)
-
-        a = rwe.groupby('soc').apply(mean_embed).to_frame('embeddings')
-        b = oce.groupby('soc').apply(mean_embed).to_frame('embeddings')
-
-        mean_embd = pd.concat([a,b]).groupby('soc').apply(mean_embed).to_frame('embeddings').reset_index()
-
-        return mean_embd
-
-    @cached_property
-    def titles_df(self):
-        titles = self.titles_pkg.resource('titles').dataframe()
-
-        return titles
-
-    @cached_property
-    def title_map(self):
-
-        title_map = { r.soc:r.title for idx, r in self.occ_df.iterrows() }
-        return title_map
 
     @cached_property
     def whoosh_index(self):
@@ -154,9 +134,6 @@ class SOCClassifier:
 
         with ix.searcher() as searcher:
             parser = QueryParser("title", ix.schema, termclass=FuzzyTerm)
-            # parser.add_plugin(FuzzyTermPlugin())
-            # parser.remove_plugin_class(PhrasePlugin)
-            # parser.add_plugin(SequencePlugin())
 
             qs = self.generate_whoosh_query(title)
 
@@ -179,7 +156,7 @@ class SOCClassifier:
 
                 return t[t.score > .8].iloc[:10]
             else:
-                return pd.DataFrame([], columns=['soc','score','alt_title','soc_title'])
+                return pd.DataFrame([], columns=['soc', 'score', 'alt_title', 'soc_title'])
 
     def search_embed(self, q_df, nhits=30) -> list[dict[str, Any]]:
         """Find the top SOC codes for a query dataframe, using embeddings"""
@@ -204,15 +181,15 @@ class SOCClassifier:
 
                 hits.append(m_row.to_dict())
 
-            hits_df = pd.DataFrame(hits)\
-                .sort_values('score', ascending=False)\
+            hits_df = pd.DataFrame(hits) \
+                .sort_values('score', ascending=False) \
                 .drop_duplicates(subset=['soc'])
 
             mhits_df = pd.DataFrame(hits) \
                 .groupby('soc') \
                 .agg({'score': ['mean', 'count']}) \
                 .set_axis(['score', 'score_count'], axis=1) \
-                .sort_values('score', ascending=False) \
+                .sort_values('score', ascending=False)
 
             d = {
                 'q_idx': idx,
@@ -241,16 +218,16 @@ class SOCClassifier:
 
         alt_title_map = {r.soc: r.alt_title for idx, r in th.iterrows()}
 
-        th = th[['soc','title_score']].groupby('soc').agg({'title_score': 'sum'}).reset_index()
+        th = th[['soc', 'title_score']].groupby('soc').agg({'title_score': 'sum'}).reset_index()
 
         # body hits
         z = self.search_embed(embed)[0]
         bh = z['hits'].rename(columns={'score': 'body_score'})
         bs_max = bh.body_score.max()
 
-        bh = bh[['soc','body_score']].groupby('soc').agg({'body_score': 'sum'}).reset_index()
+        bh = bh[['soc', 'body_score']].groupby('soc').agg({'body_score': 'sum'}).reset_index()
 
-        df = th[['soc','title_score']].merge(bh, on='soc', how='outer')
+        df = th[['soc', 'title_score']].merge(bh, on='soc', how='outer')
 
         # The second fillna() handles the case where all of the series is nan,
         # in which case the first fillna() will not fill anything because of the nan
@@ -264,6 +241,123 @@ class SOCClassifier:
         df['body_score_scaled'] = scaler.fit_transform(df[['body_score']])
         df['title_score_scaled'] = scaler.fit_transform(df[['title_score']])
 
-        df['score'] = ((df.body_score_scaled+.25) * df.title_score_scaled)/1.25
+        df['score'] = ((df.body_score_scaled + .25) * df.title_score_scaled) / 1.25
 
         return df.sort_values('score', ascending=False)
+
+
+class SocPartProcessor:
+
+    def __init__(self,
+                 df,
+                 titles_pkg_url=None,
+                 embed_pkg_url=None,
+                 whoosh_dir='./whoosh_dir',
+                 progress=False):
+        """
+        :param rc_config: Cache configuration
+        :param part_name: name of the part we are processing
+        :param titles_pkg_url: Url to metapack package for SOC titles
+        :param embed_pkg_url:  Url to metapack package for SOC embeddings
+        :param whoosh_dir: Directory name for storing Whoosh index
+        :param progress: If true, show progress bar
+        :param df: If provided, use this as the dataframe to process, rather than get it from the cache
+        """
+
+        self.df = df
+        self.progress = progress
+        self.whoosh_dir = whoosh_dir
+        self.titles_pkg_url = titles_pkg_url
+        self.embed_pkg_url = embed_pkg_url
+
+        if self.progress:
+            self.pb = lambda x, size: tqdm(x, leave=False, total=size)
+        else:
+            self.pb = lambda x, size: x
+
+        self.sc = SOCClassifier(titles_pkg_url=self.titles_pkg_url,
+                                embed_pkg_url=self.embed_pkg_url,
+                                whoosh_dir='./whoosh_dir')
+
+        self.result_df = None
+
+    def match_embeddings(self):
+        """Worker function to Run embeddings given the keys for the text segments"""
+
+        frames = []
+
+        for idx, r in self.pb(self.df.iterrows(), len(self.df)):
+            t = self.sc.search(r.title, r.embeddings)
+            t = t.iloc[:10]
+            t['source'] = r.source
+            t['exp_id'] = r.exp_id
+            t['pid'] = r.pid
+
+            frames.append(t)
+
+        self.result_df = pd.concat(frames)
+        return self.result_df
+
+
+class SocProcessor:
+
+    def __init__(self, rc_config: Union[dict, ObjectStore], n_jobs=8,
+                 titles_pkg_url=None,
+                 embed_pkg_url=None,
+                 ):
+
+        self.n_jobs = n_jobs
+        self.rc_config = rc_config
+
+        if isinstance(rc_config, dict):
+            rc = ObjectStore(**rc_config)
+        else:
+            rc = rc_config
+
+        self.q = get_classification_queues(rc)
+
+    @cached_property
+    def embd_keys(self):
+        """Get the keys for the experience embeddings dataframes"""
+        return list(self.q.exp_embeddings.list())
+
+    @cached_property
+    def tem_keys(self):
+        """Get the keys for the already processed matched"""
+        return list(self.q.parts.sub('te_matches').list())
+
+    @cached_property
+    def remain_match_keys(self):
+        """Get the keys for the experience embeddings dataframes that have not been matched"""
+        return list(sorted(set(self.embd_keys) - set(self.tem_keys)))
+
+    def chunk_embed_df(self, df, chunk_size=1000):
+        """Chunk the embeddings dataframe into smaller dataframes"""
+
+        for i in range(0, df.shape[0], chunk_size):
+            yield df[i:i + chunk_size]
+
+    @staticmethod
+    def match_worker(chunk):
+        sp = SocPartProcessor(chunk)
+        sp.match_embeddings()
+        return sp.result_df
+
+    def run(self):
+
+        for key_n, key in tqdm(enumerate(self.remain_match_keys),
+                               total=len(self.remain_match_keys),
+                               desc='Match parts'):
+            chunks = list(self.chunk_embed_df(self.q.exp_embeddings[key]))
+
+            frames = Parallel(n_jobs=self.n_jobs)(
+                delayed(self.match_worker)(chunk)
+                for chunk in tqdm(
+                    chunks,
+                    desc=f'Match chunks for {key}'))
+
+            df = pd.concat(frames)
+
+            self.q.parts.sub('te_matches')[key] = df
+
+        return results

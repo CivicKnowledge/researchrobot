@@ -15,6 +15,7 @@ class ClassificationQueues:
     rce: S3ObjectStore
     chunks: S3ObjectStore
     parts: S3ObjectStore
+    exp_embeddings: S3ObjectStore
 
     tasks: RedisObjectStore
     inprocess: RedisObjectStore
@@ -25,7 +26,7 @@ class ClassificationQueues:
 
 
 # Collect references to all of the queues we use for classification tasks
-def get_classification_queues(rc, version=2):
+def get_classification_queues(rc, version=3):
 
     sources = rc.sub("sources")
     profiles = rc.sub("profiles")
@@ -34,6 +35,8 @@ def get_classification_queues(rc, version=2):
 
     chunks = rce.sub("chunks")
     parts = rce.sub("parts")
+
+    exp_embeddings = parts.sub("exp_embeddings")
 
     # Redis Queues
     redis_os = rce.sub(name="barker_redis")
@@ -46,5 +49,6 @@ def get_classification_queues(rc, version=2):
     log = redis_os.queue("log", max_length=1000)
 
     return ClassificationQueues(
-        redis_os, sources, profiles, rce, chunks, parts, tasks, inprocess, complete, stats, log
+        redis_os, sources, profiles, rce, chunks, parts, exp_embeddings,
+        tasks, inprocess, complete, stats, log
     )
