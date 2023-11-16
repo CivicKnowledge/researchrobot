@@ -4,7 +4,6 @@ import os
 
 import openai
 
-# No idea what is going on here.
 from openai import RateLimitError, BadRequestError
 
 #@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=1, max=20),
