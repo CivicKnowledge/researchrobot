@@ -11,6 +11,8 @@ slugify
 tabulate
 tableintuit
 tqdm
-
+colored
 jsonref
 python-openapi
+alive-progress
+tiktoken

@@ -1036,3 +1036,13 @@ class RedisCmd:
             return getattr(self.client, item)(self.prefix + "/" + key, *args, **kwargs)
 
         return _
+
+def resolve_cache(cache_config):
+    """Resolve a cache configuration to a cache object, or pass thorugh a cache object"""
+    if cache_config is None:
+        return None
+
+    if isinstance(cache_config, dict):
+        return ObjectStore.new(**cache_config)
+    else:
+        return cache_config

@@ -3,6 +3,9 @@ from docstring_parser import parse
 from pydantic import BaseModel
 from typing import Any, Dict, Type, List, get_type_hints
 
+from termcolor import colored
+
+
 def map_types(v):
     return {
         'str': 'string',
@@ -97,18 +100,34 @@ def generate_tools_specification(cls: Type) -> List[Dict[str, Any]]:
 
     return functions_spec
 
-# Example usage
-# class MyExampleClass:
-#     def my_method(self, param1: int, param2: MyPydanticModel) -> MyPydanticModel:
-#         """
-#         Example method description.
-#         Args:
-#           param1 (int): Description of param1.
-#           param2 (MyPydanticModel): Description of param2.
-#         Returns:
-#           MyPydanticModel: Description of return value.
-#         """
-#         pass
 
-# tools_spec = generate_tools_specification(MyExampleClass)
-# print(tools_spec)
+def pretty_print_conversation(messages):
+    role_to_color = {
+        "system": "red",
+        "user": "green",
+        "assistant": "blue",
+        "tool": "magenta",
+    }
+
+    for message in messages:
+        try:
+            role = message.get('role','unknown')
+            content = (message.get('content','no content') or '')[:120]
+            tool_call = (message.get('tool_calls', '') or '')[:120]
+            name = message.get('name')
+        except AttributeError:
+            print("BAD!", message)
+            continue
+        
+        if role == "system":
+            print(colored(f"system: {content}\n", role_to_color[role]))
+        elif role == "user":
+            print(colored(f"user: {content}\n", role_to_color[role]))
+        elif role == "assistant" and tool_call:
+            print(colored(f"assistant: {tool_call}\n", role_to_color[role]))
+        elif role == "assistant" and not tool_call:
+            print(colored(f"assistant: {content}\n", role_to_color[role]))
+        elif role == "tool":
+            print(colored(f"function ({name}): {content}\n", role_to_color[role]))
+        else:
+            print(colored(f"unknown: {content}\n"))

@@ -17,6 +17,12 @@ import textdistance
 
 logger = logging.getLogger(__name__)
 
+
+def minmax(v):
+    l = v.min()
+    u = v.max()
+    return (v - l) / (u - l)
+
 def cosine_similarity(A,B):
     from numpy.linalg import norm
     return np.dot(A,B)/(norm(A)*norm(B))
@@ -280,8 +286,6 @@ class SocEdData:
 
         return m
 
-
-
     @cached_property
     def related_df(self ):
         """"Related occupations"""
@@ -395,8 +399,6 @@ class SocEdClassifier:
         if len(r['results']) == 0:
             return null_df
 
-
-
         hits = r['results'][0]['hits']
 
         rows = []
@@ -412,9 +414,6 @@ class SocEdClassifier:
             rows.append(doc)
 
         t = pd.DataFrame(rows).sort_values('score', ascending=False)
-
-        # decay_f = mk_exp_decay(n_hits)
-        # t['f'] = decay_f(t.index)
 
         t = t.merge(self.data.ent_df[['eid', 'soc', 'detailed','idx']], on='eid')
 
@@ -432,6 +431,10 @@ class SocEdClassifier:
         t['title'] = t.detailed.apply(lambda v:self.data.title_map.get(v, v))
 
         t = t[['detailed', 'idx', 'kind', 'title', 'text', 'score']].rename(columns={'score':'body_score'})
+
+        # .8 is a really terrible score for an embeddding so make it 0,
+        # and ( for the body text) .98 seems to be the maximum, so make it 1
+        t['body_score'] = minmax(t.body_score.clip(lower=.7, upper=.98)).fillna(0)
 
         return t
 
@@ -482,30 +485,73 @@ class SocEdClassifier:
 
         return t
 
+    title_excludes = ['and', 'worker', 'operator', 'other', 'all',
+                      'except', 'first-line', 'clerk', 'assistant']
+
     def job_title_search(self, title):
+        import simplemma
+
+        words = title.replace(',','').split()
+        title = ' '.join([w for w in words if simplemma.lemmatize(w, 'en')  not in self.title_excludes])
 
         t = self.job_title_search_embd(title).rename(columns={'score': 'title_embd_score'})
         b = self.job_title_search_text(title).rename(columns={'jaccard': 'title_text_score'})[
             ['detailed', 'title_text_score']]
         b = b.sort_values('title_text_score', ascending=False).drop_duplicates(subset='detailed')
         t = t.merge(b, on='detailed', how='left').fillna(0)
-        t['title_score'] = t.title_embd_score + t.title_text_score
+
+        # empirical max scores, for scaling
+        # title_embd_score    0.9354
+        # title_text_score    1.0000
+        # title_score         1.9354
+        # body_score          0.8841
+        # score               2.7585
+
+        # .7 is a really terrible score for an embeddding so make it 0,
+        # and .94 seems to be the maximum, so make it 1
+        t['title_embd_score'] = minmax(t.title_embd_score.clip(lower=.7, upper=.94))
+
+        # Title text scores over .6 mean that the match shares at least 60% of the title text,
+        # which requires either an exact match, or a match on more than 2 common words,
+        # so just set this to be a plus score. Make that condition give a 20% boost
+        t['title_score_factor'] = t.title_text_score.apply(lambda v: 1.2 if v > .6 else 1)
+
+        # The title text score is already scale to 1, so the combined score would be scaled to 2
+        # so divide by 2 to rescale to 1
+        t['title_score'] = t.title_embd_score * t.title_score_factor
+
         t = t.sort_values('title_score', ascending=False).rename(columns={'text': 'title'})
 
-        return t[['soc', 'detailed', 'idx',  'kind', 'title', 'title_embd_score', 'title_text_score', 'title_score']]
+        t = t[['soc', 'detailed', 'idx', 'kind', 'title', 'title_embd_score', 'title_text_score','title_score']]
 
-    def job_search(self, title=None, summary=None):
+        return t
+
+
+
+    def job_search(self, title=None, summary=None, limit=True):
         """Search for jobs, with a title or embed"""
+
+        # empirical max scores, for scaling
+        # title_embd_score    0.9354
+        # title_text_score    1.0000
+        # title_score         1.9354
+        # body_score          0.8841
+        # score               2.7585
 
         t = self.job_title_search(title)
         b = self.job_body_search_text(summary)
 
+        # Create an index of both t and t
         i = pd.concat([t[['idx', 'detailed', 'title']], b[['idx', 'detailed', 'title']]]).drop_duplicates(
             subset=['idx'])
+
+        # Merge b and t onto the index
         df = i.merge(t[['idx', 'title_embd_score', 'title_text_score', 'title_score']], on='idx', how='left') \
-            .merge(b[['idx', 'text', 'body_score']], on='idx', how='left')
-        df = df[
-            ['idx', 'detailed', 'title', 'text', 'title_embd_score', 'title_text_score', 'title_score', 'body_score']]
+              .merge(b[['idx', 'text', 'body_score']], on='idx', how='left')
+
+        # Select subset of columns
+        df = df[['idx', 'detailed', 'title', 'text',
+                 'title_embd_score', 'title_text_score', 'title_score', 'body_score']]
 
         df['body_score'] = df.body_score.fillna(0)
         df.loc[df.text.isnull(),'text'] = df.loc[df.text.isnull(),'detailed'].apply(self.data.text_map.get)
@@ -516,7 +562,13 @@ class SocEdClassifier:
         df.loc[:, score_cols] = df.loc[:, score_cols].round(4)
         df = df.sort_values('score', ascending=False).drop_duplicates(subset=['idx'])
 
-        return df
+        if limit:
+
+            idx = (df.score >= .7) | (df.body_score >= .7 ) | (df.title_embd_score >= .5)
+
+            return df.loc[idx]
+        else:
+            return df
 
     def edu_title_search(self, major):
         search_parameters = {

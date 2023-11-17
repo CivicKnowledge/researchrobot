@@ -6,14 +6,13 @@ from researchrobot.cmech.classify import resolve_cache
 import logging
 import dataclasses
 
-from researchrobot.openai.completions import openai_one_completion
+from researchrobot.openai_tools.completions import openai_one_completion
 from openai.types.chat import ChatCompletion
 
 logger = logging.getLogger(__name__)
 
-costs = {
-    'gpt-3.5-turbo-16k-0613': (0.0010, 0.0020),
-}
+from researchrobot.openai_tools import costs
+
 
 def compose_examples(self, sec, example_file='./example.csv'):
     """Compose an example for the system prompt"""
