@@ -1,7 +1,6 @@
 from tenacity import (retry, stop_after_attempt, wait_exponential, retry_if_not_exception_type,
                         retry_if_exception_type)
 import os
-
 import openai
 
 from openai import RateLimitError, BadRequestError
@@ -29,6 +28,8 @@ def openai_one_completion(prompt, system=None,  json_mode = False,
     if json_mode:
         args['response_format']={ "type": "json_object" }
 
+    # The problem can either be split into a system and user prompt, or it can be
+    # passed in as a single prompt dict, with multiple roles, since this is a chat interface.
     if isinstance(prompt, str):
 
         if system:

@@ -1,0 +1,16 @@
+boto3
+geoid
+more_itertools
+msgpack
+openai
+openai-async
+pandas
+pyyaml
+requests
+slugify
+tabulate
+tableintuit
+tqdm
+
+jsonref
+python-openapi

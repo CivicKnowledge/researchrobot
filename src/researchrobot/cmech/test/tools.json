@@ -1,0 +1,39 @@
+[
+    {
+        "type": "function",
+        "function": {
+            "name": "search_job",
+            "description": "Search for a job experience by title and description.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "The title of the job experience to search for. This should be a\nstring representing the job title, such as 'Software Engineer' or 'Data Analyst'."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "The description of the job experience to search for. This should\nbe a detailed string describing the job role, responsibilities, or\nany specific details relevant to the search."
+                    }
+                }
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "The title of the experience."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "The description of the experience."
+                    },
+                    "soc_codes": {
+                        "type": "string",
+                        "description": "The SOC codes of the experience."
+                    }
+                }
+            }
+        }
+    }
+]
